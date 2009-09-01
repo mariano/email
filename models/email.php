@@ -49,6 +49,10 @@ class Email extends EmailAppModel {
 		if (!empty($compress) && App::import('Behavior', 'Syrup.Compressible')) {
 			$this->Behaviors->attach('Syrup.Compressible', $compress);
 		}
+
+		if (!isset($this->RobotTask)) {
+			$this->RobotTask = ClassRegistry::init('Robot.RobotTask');
+		}
 	}
 
 	/**
@@ -122,10 +126,6 @@ class Email extends EmailAppModel {
 			}
 		}
 
-		$variables = array_merge(array(
-			'callback' => null
-		), $variables);
-
 		$variables['__parameters'] = array(
 			'webroot' => Router::url('/', true)
 		);
@@ -181,12 +181,7 @@ class Email extends EmailAppModel {
 	 */
 	public function schedule($id, $scheduled = null) {
 		if (!isset($this->RobotTask)) {
-			$this->RobotTask = ClassRegistry::init('Robot.RobotTask');
-
-			if (empty($this->RobotTask)) {
-				echo 'fuck';
-				return false;
-			}
+			return false;
 		}
 
 		return $this->RobotTask->schedule(
@@ -237,10 +232,17 @@ class Email extends EmailAppModel {
 
 		$result = $this->mail($mail);
 
+		if (empty($email[$this->alias]['failed'])) {
+			$email[$this->alias]['failed'] = 0;
+		}
+		if (!$result) {
+			$email[$this->alias]['failed'] += 1;
+		}
+
 		$email = array($this->alias => array(
 			'id' => $id,
 			'processed' => date('Y-m-d H:i:s'),
-			'failed' => (!$result ? 1 + $email[$this->alias]['failed'] : 0),
+			'failed' => $email[$this->alias]['failed'],
 			'sent' => ($result ? date('Y-m-d H:i:s') : null)
 		));
 
@@ -254,6 +256,12 @@ class Email extends EmailAppModel {
 			}
 			$url = str_ireplace(array('${id}', '${success}'), array($id, !empty($result) ? 1 : 0), $url);
 			$this->requestAction($url);
+		}
+
+		$retry = $variables['retry'];
+		if (!$result && $retry['enabled'] && isset($this->RobotTask) && $email[$this->alias]['failed'] < $retry['max']) {
+			$scheduled = strtotime('now') + $retry['interval'][$email[$this->alias]['failed'] - 1];
+			$this->schedule($id, $scheduled);
 		}
 
 		return $result;
@@ -466,7 +474,8 @@ class Email extends EmailAppModel {
 			'layout' => null,
 			'html' => null,
 			'text' => null,
-			'callback' => null
+			'callback' => null,
+			'retry' => false
 		), $variables);
 
 		$emailVariables = Configure::read('Email');
@@ -509,6 +518,32 @@ class Email extends EmailAppModel {
 			if (empty($variables['from']['name'])) {
 				$variables['from']['name'] = $variables['from']['email'];
 			}
+		}
+
+		if (!is_array($variables['retry'])) {
+			$variables['retry'] = array('enabled' => $variables['retry']);
+		}
+
+		$variables['retry'] = array_merge(array(
+			'enabled' => false,
+			'max' => 10,
+			'interval' => array(60, 120, 600, 1200, 2400, 4800, 9600, 19200, 38400)	// seconds
+		), $variables['retry']);
+
+		if (empty($variables['retry']['interval']) || !is_array($variables['retry']['interval'])) {
+			$variables['retry']['interval'] = array(empty($variables['retry']['interval']) ? 2400 : $variables['retry']['interval']);
+		}
+
+		reset($variables['retry']['interval']);
+		$interval = current($variables['retry']['interval']);
+		for($i=0, $limiti=$variables['retry']['max']; $i < $limiti; $i++) {
+			if (isset($variables['retry']['interval'][$i])) {
+				continue;
+			}
+			$variables['retry']['interval'][$i] =
+				$i > 0 ?
+				2 * $variables['retry']['interval'][$i - 1] :
+			   	($i + 1) * $interval;
 		}
 
 		return $variables;
