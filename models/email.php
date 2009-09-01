@@ -49,10 +49,6 @@ class Email extends EmailAppModel {
 		if (!empty($compress) && App::import('Behavior', 'Syrup.Compressible')) {
 			$this->Behaviors->attach('Syrup.Compressible', $compress);
 		}
-
-		if (!isset($this->RobotTask)) {
-			$this->RobotTask = ClassRegistry::init('Robot.RobotTask');
-		}
 	}
 
 	/**
@@ -181,7 +177,10 @@ class Email extends EmailAppModel {
 	 */
 	public function schedule($id, $scheduled = null) {
 		if (!isset($this->RobotTask)) {
-			return false;
+			$this->RobotTask = ClassRegistry::init('Robot.RobotTask');
+			if (!isset($this->RobotTask)) {
+				return false;
+			}
 		}
 
 		return $this->RobotTask->schedule(
@@ -259,9 +258,14 @@ class Email extends EmailAppModel {
 		}
 
 		$retry = $variables['retry'];
-		if (!$result && $retry['enabled'] && isset($this->RobotTask) && $email[$this->alias]['failed'] < $retry['max']) {
-			$scheduled = strtotime('now') + $retry['interval'][$email[$this->alias]['failed'] - 1];
-			$this->schedule($id, $scheduled);
+		if (!$result && $retry['enabled'] && $email[$this->alias]['failed'] < $retry['max']) {
+  			if (!isset($this->RobotTask)) {
+				$this->RobotTask = ClassRegistry::init('Robot.RobotTask');
+			}
+			if (isset($this->RobotTask)) {
+				$scheduled = strtotime('now') + $retry['interval'][$email[$this->alias]['failed'] - 1];
+				$this->schedule($id, $scheduled);
+			}
 		}
 
 		return $result;
