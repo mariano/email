@@ -124,12 +124,12 @@ class EmailTemplate extends EmailAppModel {
 		$viewPaths = $configure->viewPaths;
 		$pluginPaths = $configure->pluginPaths;
 		foreach($pluginPaths as $pluginPath) {
-			$viewPaths[] = $pluginPath . 'email' . DS . 'views' . DS . 'layouts' . DS;
+			$viewPaths[] = $pluginPath . 'email' . DS . 'views' . DS;
 		}
 
 		foreach($viewPaths as $viewPath) {
 			foreach($layoutPaths as $currentLayoutPath) {
-				$path = $viewPath . $currentLayoutPath . DS;
+				$path = $viewPath . 'layouts' . DS . $currentLayoutPath . DS;
 				if (is_dir($path)) {
 					$folder = new Folder($path);
 					list($dirs, $files) = $folder->read(true, true);
@@ -172,16 +172,19 @@ class EmailTemplate extends EmailAppModel {
 		$viewPaths = $configure->viewPaths;
 		$pluginPaths = $configure->pluginPaths;
 		foreach($pluginPaths as $pluginPath) {
-			$viewPaths[] = $pluginPath . 'email' . DS . 'views' . DS . 'layouts' . DS;
+			$viewPaths[] = $pluginPath . 'email' . DS . 'views' . DS;
 		}
 
 		foreach($viewPaths as $viewPath) {
 			foreach($layoutPaths as $currentLayoutPath) {
-				$candidate = $viewPath . $currentLayoutPath . DS . $layout . '.ctp';
+				$candidate = $viewPath . 'layouts' . DS . $currentLayoutPath . DS . $layout . '.ctp';
 				if (is_file($candidate)) {
 					$layoutPath = $candidate;
 					break;
 				}
+			}
+			if (!empty($layoutPath)) {
+				break;
 			}
 		}
 

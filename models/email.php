@@ -122,10 +122,6 @@ class Email extends EmailAppModel {
 			}
 		}
 
-		$variables['__parameters'] = array(
-			'webroot' => Router::url('/', true)
-		);
-
 		$email = array($this->alias => array(
 			'email_template_id' => !empty($emailTemplate) ? $emailTemplate['EmailTemplate']['id'] : null,
 			'queued' => date('Y-m-d H:i:s'),
@@ -207,11 +203,11 @@ class Email extends EmailAppModel {
 
 		$variables = $this->variables($email);
 		$mail = $this->render($email);
-		if (empty($mail)) {
+		if (empty($mail) || !is_array($mail)) {
 			return false;
 		}
 
-		if (empty($mail['from']['name'])) {
+		if (!empty($mail['from']) && empty($mail['from']['name'])) {
 			$mail['from']['name'] = $mail['from']['email'];
 		}
 
@@ -425,10 +421,6 @@ class Email extends EmailAppModel {
 				$parameters = array(
 					'title' => !empty($variables['subject']) ? $variables['subject'] : ''
 				);
-
-				if (!empty($variables['__parameters'])) {
-					$parameters = array_merge($parameters, $variables['__parameters']);
-				}
 
 				$variables[$type] = $this->EmailTemplate->renderLayout(
 					$variables[$type],

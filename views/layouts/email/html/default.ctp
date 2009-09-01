@@ -3,7 +3,7 @@
 	<?php echo $html->charset(); ?>
 	<title><?php echo $title_for_layout; ?></title>
 	<?php
-	echo $html->css('cake.generic');
+	echo $html->css(Router::url('cake.generic', true));
 	echo $scripts_for_layout;
 	?>
 </head>

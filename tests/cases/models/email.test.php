@@ -310,7 +310,9 @@ class EmailTest extends CakeTestCase {
 			'We\'d like to welcome you to Layout CakePHP Site.',
 			'Click here to login: ' . Router::url('/users/login', true)
 		);
-		$this->assertEqual($result, $expected);
+		foreach($expected as $line) {
+			$this->assertTrue(in_array($line, $result));
+		}
 
 		$result = $this->Email->find('first', array(
 			'conditions' => array($this->Email->alias . '.' . $this->Email->primaryKey => $id),
@@ -377,7 +379,9 @@ class EmailTest extends CakeTestCase {
 			'We\'d like to welcome you to our new site.',
 			'Click here to edit your profile: ' . Router::url('/profiles/edit', true)
 		);
-		$this->assertEqual($result, $expected);
+		foreach($expected as $line) {
+			$this->assertTrue(in_array($line, $result));
+		}
 	}
 
 	public function testCallback() {
