@@ -2,8 +2,6 @@
 class EmailAppController extends AppController {
 	/**
 	 * beforeFilter callback
-	 *
-	 * @access public
 	 */
 	public function beforeFilter() {
 		if (isset($this->Auth) && isset($this->params['robot'])) {

@@ -4,7 +4,6 @@ class Email extends EmailAppModel {
 	 * belongsTo bindings
 	 *
 	 * @var array
-	 * @access public
 	 */
 	public $belongsTo = array(
 		'Email.EmailTemplate'
@@ -14,7 +13,6 @@ class Email extends EmailAppModel {
 	 * hasMany bindings
 	 *
 	 * @var array
-	 * @access public
 	 */
 	public $hasMany = array(
 		'Email.EmailAttachment',
@@ -25,7 +23,6 @@ class Email extends EmailAppModel {
 	 * Fields to be compressed. Can be overriden with configure variable Email.compress
 	 *
 	 * @var array
-	 * @access private
 	 */
 	private $compress = array('variables', 'html', 'text');
 
@@ -33,7 +30,6 @@ class Email extends EmailAppModel {
 	 * Mailer
 	 *
 	 * @var object
-	 * @access private
 	 */
 	private $mailer;
 
@@ -62,7 +58,6 @@ class Email extends EmailAppModel {
 	 * @param array $variables Replacement variables (variable => value)
 	 * @param mixed $scheduled true to not queue (override with config Email.queue), or a string to pass to strtotime(), or the time value
 	 * @return mixed Email ID, or false if error
-	 * @access public
 	 */
 	public function send($key, $variables = array(), $scheduled = null) {
 		if (is_array($key)) {
@@ -127,6 +122,10 @@ class Email extends EmailAppModel {
 			}
 		}
 
+		$variables = array_merge(array(
+			'callback' => null
+		), $variables);
+
 		$variables['__parameters'] = array(
 			'webroot' => Router::url('/', true)
 		);
@@ -179,7 +178,6 @@ class Email extends EmailAppModel {
 	 * @param string $id Email ID
 	 * @param mixed $scheduled A string to pass to strtotime(), or the time value
 	 * @return mixed Task ID, or false if error
-	 * @access public
 	 */
 	public function schedule($id, $scheduled = null) {
 		if (!isset($this->RobotTask)) {
@@ -203,7 +201,6 @@ class Email extends EmailAppModel {
 	 *
 	 * @param string $id Email ID
 	 * @return bool Success
-	 * @access public
 	 */
 	public function sendNow($id) {
 		$email = $this->find('first', array(
@@ -214,6 +211,7 @@ class Email extends EmailAppModel {
 			return false;
 		}
 
+		$variables = $this->variables($email);
 		$mail = $this->render($email);
 		if (empty($mail)) {
 			return false;
@@ -249,6 +247,15 @@ class Email extends EmailAppModel {
 		$this->id = $id;
 		$this->save($email, true, array_keys($email[$this->alias]));
 
+		if (!empty($variables['callback'])) {
+			$url = $variables['callback'];
+			if (is_array($url)) {
+				$url = Router::url($url);
+			}
+			$url = str_ireplace(array('${id}', '${success}'), array($id, !empty($result) ? 1 : 0), $url);
+			$this->requestAction($url);
+		}
+
 		return $result;
 	}
 
@@ -257,7 +264,6 @@ class Email extends EmailAppModel {
 	 *
 	 * @param array $email Indexed array with: 'from', 'destinations', 'subject', 'html', 'text', 'attachments'
 	 * @return bool Success
-	 * @access protected
 	 */
 	protected function mail($email) {
 		if (!isset($this->mailer)) {
@@ -353,7 +359,6 @@ class Email extends EmailAppModel {
 	 * @param array $variables Replacement variables
 	 * @param bool $force If true, recompile body, otherwise look to see if it was already processed
 	 * @return array Array with indexes: 'from', 'subject', 'html', 'text'
-	 * @access public
 	 */
 	public function render($email, $variables = array(), $force = false) {
 		if (!is_array($email)) {
@@ -390,56 +395,7 @@ class Email extends EmailAppModel {
 			return false;
 		}
 
-		$variables = array(
-			'from' => array('name' => null, 'email' => null),
-			'subject' => null,
-			'layout' => null,
-			'html' => null,
-			'text' => null
-		);
-
-		$emailVariables = Configure::read('Email');
-		if (!empty($emailVariables)) {
-			$variables = Set::merge($variables, array_intersect_key($emailVariables, $variables));
-		}
-
-		if (!empty($email['EmailTemplate'])) {
-			$email['EmailTemplate']['from'] = array();
-			foreach(array('from_name', 'from_email') as $field) {
-				if (!array_key_exists($field, $email['EmailTemplate'])) {
-					continue;
-				}
-				$email['EmailTemplate']['from'][preg_replace('/^from_/i', '', $field)] = $email['EmailTemplate'][$field];
-				unset($email['EmailTemplate'][$field]);
-			}
-
-			foreach(array_intersect_key($email['EmailTemplate'], $variables) as $field => $value) {
-				$variables[$field] = $email['EmailTemplate'][$field];
-			}
-		}
-
-		if (!empty($email[$this->alias]['variables'])) {
-			$variables = array_merge(
-				$variables,
-				(array) unserialize($email[$this->alias]['variables'])
-			);
-		}
-
-		if (!empty($variables['from'])) {
-			if (!is_array($variables['from'])) {
-				$variables['from'] = array('email' => $variables['from']);
-			}
-
-			$variables['from'] = array_merge(array(
-				'name' => null,
-				'email' => null
-			), $variables['from']);
-
-			if (empty($variables['from']['name'])) {
-				$variables['from']['name'] = $variables['from']['email'];
-			}
-		}
-
+		$variables = $this->variables($email, $variables);
 		foreach($variables as $field => $value) {
 			if (!is_string($value)) {
 				continue;
@@ -494,6 +450,68 @@ class Email extends EmailAppModel {
 		$this->save(array($this->alias => $saveEmail), array_keys($saveEmail));
 
 		return $email;
+	}
+
+	/**
+	 * Get replacement variables (not replaced) for email
+	 *
+	 * @param array $email Email record
+	 * @param array $variables Replacement variables to override
+	 * @return array Array with indexes: 'from', 'subject', 'html', 'text', 'callback'
+	 */
+	protected function variables($email, $variables = array()) {
+		$variables = array_merge(array(
+			'from' => array('name' => null, 'email' => null),
+			'subject' => null,
+			'layout' => null,
+			'html' => null,
+			'text' => null,
+			'callback' => null
+		), $variables);
+
+		$emailVariables = Configure::read('Email');
+		if (!empty($emailVariables)) {
+			$variables = Set::merge($variables, array_intersect_key($emailVariables, $variables));
+		}
+
+		if (!empty($email['EmailTemplate'])) {
+			$email['EmailTemplate']['from'] = array();
+			foreach(array('from_name', 'from_email') as $field) {
+				if (!array_key_exists($field, $email['EmailTemplate'])) {
+					continue;
+				}
+				$email['EmailTemplate']['from'][preg_replace('/^from_/i', '', $field)] = $email['EmailTemplate'][$field];
+				unset($email['EmailTemplate'][$field]);
+			}
+
+			foreach(array_intersect_key($email['EmailTemplate'], $variables) as $field => $value) {
+				$variables[$field] = $email['EmailTemplate'][$field];
+			}
+		}
+
+		if (!empty($email[$this->alias]['variables'])) {
+			$variables = array_merge(
+				$variables,
+				(array) unserialize($email[$this->alias]['variables'])
+			);
+		}
+
+		if (!empty($variables['from'])) {
+			if (!is_array($variables['from'])) {
+				$variables['from'] = array('email' => $variables['from']);
+			}
+
+			$variables['from'] = array_merge(array(
+				'name' => null,
+				'email' => null
+			), $variables['from']);
+
+			if (empty($variables['from']['name'])) {
+				$variables['from']['name'] = $variables['from']['email'];
+			}
+		}
+
+		return $variables;
 	}
 }
 ?>

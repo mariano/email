@@ -5,6 +5,7 @@ class TestEmail extends Email {
 	public $useDbConfig = 'test_suite';
 	public $useTable = 'emails';
 	protected $testMail;
+	protected $requestedAction;
 
 	public function run($method) {
 		$args = array_slice(func_get_args(), 1);
@@ -24,10 +25,21 @@ class TestEmail extends Email {
 		return true;
 	}
 
+	public function requestAction($url, $extra = array()) {
+		$this->requestedAction = $url;
+		return true;
+	}
+
 	public function testSentEmail() {
 		$mail = $this->testMail;
 		$this->testMail = false;
 		return $mail;
+	}
+
+	public function testRequestedAction() {
+		$action = $this->requestedAction;
+		$this->requestedAction = false;
+		return $action;
 	}
 }
 
@@ -307,6 +319,142 @@ class EmailTest extends CakeTestCase {
 		$this->assertTrue(!empty($result));
 		$this->assertEqual($result[$this->Email->alias]['failed'], 0);
 		$this->assertTrue(!empty($result[$this->Email->alias]['sent']));
+	}
+
+	public function testSendNoTemplate() {
+		$id = $this->Email->send(array(
+			'from' => 'site@email.com',
+			'to' => 'jose@email.com',
+			'subject' => 'Welcome to New CakePHP Site',
+			'html' => '<p>Dear Jose Iglesias,</p>
+			<p>We\'d like to welcome you to our new site.</p>
+			<p>Click here to edit your profile: ${url(/profiles/edit)}</p>'
+		), true);
+		$this->assertTrue(!empty($id));
+		$result = $this->Email->testSentEmail();
+		$this->assertTrue(!empty($result));
+		$this->assertEqual($result['from']['name'], 'site@email.com');
+		$this->assertEqual($result['from']['email'], 'site@email.com');
+		$this->assertEqual($result['subject'], 'Welcome to New CakePHP Site');
+		$this->assertEqual(count($result['destinations']), 1);
+		$this->assertEqual($result['destinations'][0]['type'], 'to');
+		$this->assertEqual($result['destinations'][0]['name'], 'jose@email.com');
+		$this->assertEqual($result['destinations'][0]['email'], 'jose@email.com');
+		$this->assertTrue(empty($result['text']));
+		$this->assertNoPattern('/<title[^>]*>.+?<\/title>/i', $result['html']);
+		$result = array_values(array_filter(array_map('trim', split("\n", strip_tags($result['html'])))));
+		$expected = array(
+			'Dear Jose Iglesias,',
+			'We\'d like to welcome you to our new site.',
+			'Click here to edit your profile: ' . Router::url('/profiles/edit', true)
+		);
+		$this->assertEqual($result, $expected);
+
+		$id = $this->Email->send(array(
+			'from' => 'site@email.com',
+			'to' => 'jose@email.com',
+			'subject' => 'Welcome to New CakePHP Site',
+			'layout' => 'default',
+			'html' => '<p>Dear Jose Iglesias,</p>
+			<p>We\'d like to welcome you to our new site.</p>
+			<p>Click here to edit your profile: ${url(/profiles/edit)}</p>'
+		), true);
+		$this->assertTrue(!empty($id));
+		$result = $this->Email->testSentEmail();
+		$this->assertTrue(!empty($result));
+		$this->assertEqual($result['from']['name'], 'site@email.com');
+		$this->assertEqual($result['from']['email'], 'site@email.com');
+		$this->assertEqual($result['subject'], 'Welcome to New CakePHP Site');
+		$this->assertEqual(count($result['destinations']), 1);
+		$this->assertEqual($result['destinations'][0]['type'], 'to');
+		$this->assertEqual($result['destinations'][0]['name'], 'jose@email.com');
+		$this->assertEqual($result['destinations'][0]['email'], 'jose@email.com');
+		$this->assertTrue(empty($result['text']));
+		$this->assertPattern('/<title[^>]*>.+?<\/title>/i', $result['html']);
+		$result = array_values(array_filter(array_map('trim', split("\n", strip_tags(preg_replace('/<head[^>]*>.+<\/head>/si', '', $result['html']))))));
+		$expected = array(
+			'Dear Jose Iglesias,',
+			'We\'d like to welcome you to our new site.',
+			'Click here to edit your profile: ' . Router::url('/profiles/edit', true)
+		);
+		$this->assertEqual($result, $expected);
+	}
+
+	public function testCallback() {
+		$id = $this->Email->send(array(
+			'from' => 'site@email.com',
+			'to' => 'jose@email.com',
+			'subject' => 'Welcome to New CakePHP Site',
+			'html' => '<p>Dear Jose Iglesias,</p>
+			<p>We\'d like to welcome you to our new site.</p>
+			<p>Click here to edit your profile: ${url(/profiles/edit)}</p>'
+		), true);
+		$this->assertTrue(!empty($id));
+		$result = $this->Email->testSentEmail();
+		$this->assertTrue(!empty($result));
+		$result = $this->Email->testRequestedAction();
+		$this->assertTrue(empty($result));
+
+		$id = $this->Email->send(array(
+			'callback' => '/emails/sent',
+			'from' => 'site@email.com',
+			'to' => 'jose@email.com',
+			'subject' => 'Welcome to New CakePHP Site',
+			'html' => '<p>Dear Jose Iglesias,</p>
+			<p>We\'d like to welcome you to our new site.</p>
+			<p>Click here to edit your profile: ${url(/profiles/edit)}</p>',
+		), true);
+		$this->assertTrue(!empty($id));
+		$result = $this->Email->testSentEmail();
+		$this->assertTrue(!empty($result));
+		$result = $this->Email->testRequestedAction();
+		$this->assertEqual($result, '/emails/sent');
+
+		$id = $this->Email->send(array(
+			'callback' => '/emails/sent/${id}',
+			'from' => 'site@email.com',
+			'to' => 'jose@email.com',
+			'subject' => 'Welcome to New CakePHP Site',
+			'html' => '<p>Dear Jose Iglesias,</p>
+			<p>We\'d like to welcome you to our new site.</p>
+			<p>Click here to edit your profile: ${url(/profiles/edit)}</p>',
+		), true);
+		$this->assertTrue(!empty($id));
+		$result = $this->Email->testSentEmail();
+		$this->assertTrue(!empty($result));
+		$result = $this->Email->testRequestedAction();
+		$this->assertEqual($result, '/emails/sent/' . $id);
+
+		$id = $this->Email->send(array(
+			'callback' => array('controller' => 'emails', 'action' => 'sent', '${id}'),
+			'from' => 'site@email.com',
+			'to' => 'jose@email.com',
+			'subject' => 'Welcome to New CakePHP Site',
+			'html' => '<p>Dear Jose Iglesias,</p>
+			<p>We\'d like to welcome you to our new site.</p>
+			<p>Click here to edit your profile: ${url(/profiles/edit)}</p>',
+		), true);
+		$this->assertTrue(!empty($id));
+		$result = $this->Email->testSentEmail();
+		$this->assertTrue(!empty($result));
+		$result = $this->Email->testRequestedAction();
+		$this->assertEqual($result, '/emails/sent/' . $id);
+
+		$id = $this->Email->send(array(
+			'callback' => array('controller' => 'emails', 'action' => 'sent', '${id}', '${success}'),
+			'from' => 'site@email.com',
+			'to' => 'jose@email.com',
+			'subject' => 'Welcome to New CakePHP Site',
+			'html' => '<p>Dear Jose Iglesias,</p>
+			<p>We\'d like to welcome you to our new site.</p>
+			<p>Click here to edit your profile: ${url(/profiles/edit)}</p>',
+		), true);
+		$this->assertTrue(!empty($id));
+		$result = $this->Email->testSentEmail();
+		$this->assertTrue(!empty($result));
+		$result = $this->Email->testRequestedAction();
+		$this->assertEqual($result, '/emails/sent/' . $id . '/1');
+
 	}
 }
 ?>
