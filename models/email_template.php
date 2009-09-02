@@ -44,10 +44,11 @@ class EmailTemplate extends EmailAppModel {
 	 * @param string $content Content
 	 * @param string $layout Layout name
 	 * @param string $type Type (text / html)
+	 * @param array $variables Replacement variables
 	 * @param array $parameters Parameters (title, webroot)
 	 * @return string Content
 	 */
-	public function renderLayout($content, $layout, $type, $parameters = array()) {
+	public function renderLayout($content, $layout, $type, $variables = array(), $parameters = array()) {
 		$layout = $this->layoutPath($layout, $type);
 		if (empty($layout)) {
 			return $content;
@@ -66,6 +67,11 @@ class EmailTemplate extends EmailAppModel {
 		if (isset($parameters['title'])) {
 			$this->View->pageTitle = $parameters['title'];
 		}
+
+		if (!empty($variables)) {
+			$this->View->set($variables);
+		}
+
 		return $this->View->renderLayout($content, $layout);
 	}
 

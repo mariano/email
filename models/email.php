@@ -201,8 +201,8 @@ class Email extends EmailAppModel {
 			return false;
 		}
 
-		$variables = $this->variables($email);
 		$mail = $this->render($email);
+
 		if (empty($mail) || !is_array($mail)) {
 			return false;
 		}
@@ -225,6 +225,7 @@ class Email extends EmailAppModel {
 			$mail['attachments'] = Set::extract($email['EmailAttachment'], '/file');
 		}
 
+		$variables = $this->variables($email);
 		$result = $this->mail($mail);
 
 		if (empty($email[$this->alias]['failed'])) {
@@ -426,6 +427,7 @@ class Email extends EmailAppModel {
 					$variables[$type],
 					$variables['layout'],
 					$type,
+					$variables,
 					$parameters
 				);
 			}
@@ -439,8 +441,7 @@ class Email extends EmailAppModel {
 			'html' => null
 		);
 
-		$email = Set::merge(array_intersect_key($variables, $email));
-
+		$email = Set::merge($email, array_intersect_key($variables, $email));
 		$saveEmail = $email;
 		foreach(array('name', 'email') as $field) {
 			if (!isset($email['from'][$field])) {
@@ -485,11 +486,15 @@ class Email extends EmailAppModel {
 				if (!array_key_exists($field, $email['EmailTemplate'])) {
 					continue;
 				}
-				$email['EmailTemplate']['from'][preg_replace('/^from_/i', '', $field)] = $email['EmailTemplate'][$field];
+				$email['EmailTemplate']['from'][preg_replace('/^from_/i', '', $field)] = trim($email['EmailTemplate'][$field]);
 				unset($email['EmailTemplate'][$field]);
 			}
+			$email['EmailTemplate']['from'] = array_filter($email['EmailTemplate']['from']);
 
 			foreach(array_intersect_key($email['EmailTemplate'], $variables) as $field => $value) {
+				if (empty($email['EmailTemplate'][$field])) {
+					continue;
+				}
 				$variables[$field] = $email['EmailTemplate'][$field];
 			}
 		}
