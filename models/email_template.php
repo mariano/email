@@ -17,7 +17,7 @@ class EmailTemplate extends EmailAppModel {
 			'valid' => array('allowEmpty' => true, 'rule' => 'validateEmailLayout')
 		),
 		'html' => array(
-			'valid' => array('rule' => array('validateOneNotEmpty', 'fields' => array(
+			'valid' => array('rule' => array('validateOneNotEmpty', array(
 				'html', 'text'
 			)))
 		)

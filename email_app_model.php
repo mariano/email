@@ -11,19 +11,19 @@ class EmailAppModel extends AppModel {
 	 * Validates that at least one of the given fields is not empty
 	 *
 	 * @param array $value Array in the form of $field => $value
-	 * @param array $parameters Parameters ('fields')
+	 * @param array $fields List of fields where to check
 	 * @return bool Success
 	 */
-	public function validateOneNotEmpty($value, $parameters = array()) {
+	public function validateOneNotEmpty($value, $fields = array()) {
 		reset($value);
 		$field = key($value);
 		$value = array_shift($value);
-		if (empty($parameters['fields'])) {
-			$parameters['fields'] = array($field);
+		if (empty($fields)) {
+			$fields = array($field);
 		}
 
 		$valid = false;
-		foreach((array) $parameters['fields'] as $field) {
+		foreach((array) $fields as $field) {
 			if (!empty($this->data[$this->alias][$field]) && Validation::notEmpty($this->data[$this->alias][$field])) {
 				$valid = true;
 				break;
