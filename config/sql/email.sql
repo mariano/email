@@ -63,4 +63,4 @@ ALTER TABLE `email_templates`
 
 ALTER TABLE `emails`
     ADD KEY `email_template_id`(`email_template_id`),
-    ADD CONSTRAINT `emails__emails_templates` FOREIGN KEY(`email_template_id`) REFERENCES `email_templates`(`id`);
+    ADD CONSTRAINT `emails__emails_templates` FOREIGN KEY(`email_template_id`) REFERENCES `email_templates`(`id`) ON DELETE SET NULL;
