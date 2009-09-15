@@ -1,4 +1,6 @@
 <?php
+App::import('Core', 'Router');
+
 class EmailTemplate extends EmailAppModel {
 	/**
 	 * Validation rules
