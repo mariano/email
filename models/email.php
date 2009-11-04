@@ -49,6 +49,9 @@ class Email extends EmailAppModel {
 		if (!empty($compress) && App::import('Behavior', 'Syrup.Compressible')) {
 			$this->Behaviors->attach('Syrup.Compressible', $compress);
 		}
+		foreach($this->hasMany as $key => $binding) {
+			$this->hasMany[$key]['dependent'] = true;
+		}
 	}
 
 	/**
@@ -235,15 +238,20 @@ class Email extends EmailAppModel {
 			$email[$this->alias]['failed'] += 1;
 		}
 
-		$email = array($this->alias => array(
-			'id' => $id,
-			'processed' => date('Y-m-d H:i:s'),
-			'failed' => $email[$this->alias]['failed'],
-			'sent' => ($result ? date('Y-m-d H:i:s') : null)
-		));
+		$keep = Configure::read('Email.keep');
+		if (!$result || !empty($keep)) {
+			$email = array($this->alias => array(
+				'id' => $id,
+				'processed' => date('Y-m-d H:i:s'),
+				'failed' => $email[$this->alias]['failed'],
+				'sent' => ($result ? date('Y-m-d H:i:s') : null)
+			));
 
-		$this->id = $id;
-		$this->save($email, true, array_keys($email[$this->alias]));
+			$this->id = $id;
+			$this->save($email, true, array_keys($email[$this->alias]));
+		} else if ($result) {
+			$this->delete($id);
+		}
 
 		if (!empty($variables['callback'])) {
 			$url = $variables['callback'];
