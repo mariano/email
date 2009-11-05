@@ -77,11 +77,13 @@ class Email extends EmailAppModel {
 		foreach(array('to', 'cc', 'bcc') as $destinationType) {
 			$destinations[$destinationType] = array();
 			if (!empty($variables[$destinationType])) {
-				foreach((array) $variables[$destinationType] as $i => $destination) {
-					if (!is_array($destination)) {
-						$destination = array('email' => $destination);
-					}
-
+				if (!is_array($variables[$destinationType])) {
+					$variables[$destinationType] = array('email' => $variables[$destinationType]);
+				}
+				if (!empty($variables[$destinationType]['email'])) {
+					$variables[$destinationType] = array(array_intersect_key($variables[$destinationType], array('name'=>true, 'email'=>true)));
+				}
+				foreach($variables[$destinationType] as $i => $destination) {
 					$destination = array_merge(array(
 						'name' => null,
 						'email' => null
