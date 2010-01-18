@@ -1,5 +1,6 @@
 <?php
 class EmailsController extends EmailAppController {
+	public $uses = array('Email.Email');
 	/**
 	 * Sends a scheduled email, only to be called through robot plugin
 	 *
