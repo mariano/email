@@ -207,13 +207,14 @@ class Email extends EmailAppModel {
 		}
 
 		$mail = $this->render($email);
-
 		if (empty($mail) || !is_array($mail)) {
 			return false;
 		}
 
-		if (!empty($mail['from']) && empty($mail['from']['name'])) {
-			$mail['from']['name'] = $mail['from']['email'];
+		foreach(array('from', 'replyTo') as $key) {
+			if (!empty($mail[$key]) && empty($mail[$key]['name'])) {
+				$mail[$key]['name'] = $mail[$key]['email'];
+			}
 		}
 
 		$mail['destinations'] = array();
@@ -281,7 +282,7 @@ class Email extends EmailAppModel {
 	/**
 	 * Perform the actual email sending
 	 *
-	 * @param array $email Indexed array with: 'from', 'destinations', 'subject', 'html', 'text', 'attachments'
+	 * @param array $email Indexed array with: 'from', 'replyTo', 'destinations', 'subject', 'html', 'text', 'attachments'
 	 * @return bool Success
 	 */
 	protected function mail($email) {
@@ -336,6 +337,9 @@ class Email extends EmailAppModel {
 			$mail = Swift_Message::newInstance();
 			$mail->setFrom(array($email['from']['email'] => $email['from']['name']));
 			$mail->setSender($email['from']['email']);
+			if (!empty($email['replyTo']) && !empty($email['replyTo']['email'])) {
+				$mail->setReplyTo(array($email['replyTo']['email'] => $email['replyTo']['name']));
+			}
 			$mail->setSubject($email['subject']);
 
 			$methods = array('cc' => 'addCc', 'bcc' => 'addBcc', 'to' => 'addTo');
@@ -446,6 +450,7 @@ class Email extends EmailAppModel {
 		$id = $email[$this->alias][$this->primaryKey];
 		$email = array(
 			'from' => array('name' => null, 'email' => null),
+			'replyTo' => null,
 			'subject' => null,
 			'text' => null,
 			'html' => null
@@ -477,6 +482,7 @@ class Email extends EmailAppModel {
 	protected function variables($email, $variables = array()) {
 		$variables = array_merge(array(
 			'from' => array('name' => null, 'email' => null),
+			'replyTo' => array('name' => null, 'email' => null),
 			'subject' => null,
 			'layout' => null,
 			'html' => null,
@@ -516,18 +522,20 @@ class Email extends EmailAppModel {
 			);
 		}
 
-		if (!empty($variables['from'])) {
-			if (!is_array($variables['from'])) {
-				$variables['from'] = array('email' => $variables['from']);
-			}
+		foreach(array('from', 'replyTo') as $variable) {
+			if (!empty($variables[$variable])) {
+				if (!is_array($variables[$variable])) {
+					$variables[$variable] = array('email' => $variables[$variable]);
+				}
 
-			$variables['from'] = array_merge(array(
-				'name' => null,
-				'email' => null
-			), $variables['from']);
+				$variables[$variable] = array_merge(array(
+					'name' => null,
+					'email' => null
+				), $variables[$variable]);
 
-			if (empty($variables['from']['name'])) {
-				$variables['from']['name'] = $variables['from']['email'];
+				if (empty($variables[$variable]['name'])) {
+					$variables[$variable]['name'] = $variables[$variable]['email'];
+				}
 			}
 		}
 
