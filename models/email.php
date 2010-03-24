@@ -185,7 +185,7 @@ class Email extends EmailAppModel {
 		}
 
 		return $this->RobotTask->schedule(
-			array('plugin' => 'email', 'controller' => 'emails', 'action' => 'send'),
+			array('admin' => false, 'plugin' => 'email', 'controller' => 'emails', 'action' => 'send'),
 			compact('id'),
 			$scheduled
 		);
