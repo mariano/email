@@ -324,11 +324,12 @@ class Email extends EmailAppModel {
 					$this->mailer->setHost($transport['host']);
 					$this->mailer->setPort($transport['port']);
 					if (!empty($transport['user'])) {
-						$this->mailer->setUser($transport['user']);
+						$this->mailer->setUsername($transport['user']);
 					}
 					if (!empty($transport['password'])) {
 						$this->mailer->setPassword($transport['password']);
 					}
+					$this->mailer->start();
 				break;
 			}
 		}
