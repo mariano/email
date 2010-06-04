@@ -39,6 +39,26 @@ class EmailTemplateFixture extends CakeTestFixture {
 				<p><a href="${url(/users/login)}">Click here to login: ${url(/users/login)}</a></p>
 			',
 			'text' => null
+		),
+		array(
+			'id' => 'f13f5408-6f6d-11df-a4bb-002618f2d9f9',
+			'key' => 'signup_school',
+			'from_name' => null,
+			'from_email' => 'layout@email.com',
+			'subject' => 'Welcome to ${school}',
+			'layout' => 'default',
+			'html' => '
+				<p>Dear ${name},</p>
+				<p>We\'d like to welcome you to ${school}.</p>
+				<p><a href="${url(/users/login)}">Click here to login: ${url(/users/login)}</a></p>
+				<p>${message}</p>
+			',
+			'text' => '
+				Dear ${name},
+				We\'d like to welcome you to ${school}.
+				Click here to login: ${url(/users/login)}
+				${message}
+			'
 		)
 	);
 }

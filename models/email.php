@@ -425,7 +425,18 @@ class Email extends EmailAppModel {
 				continue;
 			}
 
-			$variables[$field] = $this->EmailTemplate->replace($value, $variables);
+			$fieldVariables = $variables;
+			if (in_array($field, array('html', 'text'))) {
+				$formatVariablesKey = $field.'Variables';
+				if (array_key_exists($formatVariablesKey, $fieldVariables)) {
+					$fieldVariables = Set::merge(
+						array_diff_key($fieldVariables, array('htmlVariables'=>null, 'textVariables'=>null)),
+						$fieldVariables[$formatVariablesKey]
+					);
+				}
+			}
+
+			$variables[$field] = $this->EmailTemplate->replace($value, $fieldVariables);
 		}
 
 		if (!empty($variables['layout'])) {

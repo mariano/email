@@ -51,6 +51,7 @@ class EmailTest extends CakeTestCase {
 	public function startTest($method) {
 		$this->Email = ClassRegistry::init('TestEmail');
 		Configure::delete('Email');
+		Configure::write('Email.keep', true);
 	}
 
 	public function endTest($method) {
@@ -488,6 +489,95 @@ class EmailTest extends CakeTestCase {
 		$this->assertTrue(!empty($result));
 		$result = $this->Email->testRequestedAction();
 		$this->assertEqual($result, '/emails/sent/' . $id . '/1');
+	}
+
+	public function testSendTemplateFormatVariables() {
+		$id = $this->Email->send('signup_school', array(
+			'to' => 'claudia@email.com',
+			'name' => 'Claudia Mansilla',
+			'school' => 'Cricava School',
+			'message' => 'Personal message'
+		));
+		$this->assertTrue(!empty($id));
+		$result = $this->Email->testSentEmail();
+		$this->assertTrue(empty($result));
+		$result = $this->Email->sendNow($id);
+		$this->assertTrue($result);
+		$result = $this->Email->testSentEmail();
+		$this->assertTrue(!empty($result));
+		$this->assertTrue(!empty($result['text']));
+		$this->assertTrue(!empty($result['html']));
+
+		foreach(array('text', 'html') as $format) {
+			$result[$format] = preg_replace('/(<p>)?This email was sent .+?CakePHP Framework(,\s+http:\/\/(www\.)?cakephp\.org)?(<\/a><\/p>)?\.?/si', '', $result[$format]);
+		}
+
+		$resultText = array_values(array_filter(array_map('trim', split("\n", $result['text']))));
+		$expected = array(
+			'Dear Claudia Mansilla,',
+			'We\'d like to welcome you to Cricava School.',
+			'Click here to login: ' . Router::url('/users/login', true),
+			'Personal message'
+		);
+		$this->assertEqual($resultText, $expected);
+
+		$resultHtml = $result['html'];
+		$resultHtml = preg_replace('/^.*?<body>(.+?)<\/body>.*$/si', '\\1', $result['html']);
+		$resultHtml = array_values(array_filter(array_map('trim', split("\n", $resultHtml))));
+		$expected = array(
+			'<p>Dear Claudia Mansilla,</p>',
+			'<p>We\'d like to welcome you to Cricava School.</p>',
+			'<p><a href="' . Router::url('/users/login', true) . '">Click here to login: ' . Router::url('/users/login', true).'</a></p>',
+			'<p>Personal message</p>'
+		);
+		$this->assertEqual($resultHtml, $expected);
+
+		$message = 'Personal message' . "\n" . 'with two lines';
+		$id = $this->Email->send('signup_school', array(
+			'to' => 'claudia@email.com',
+			'name' => 'Claudia Mansilla',
+			'school' => 'Cricava School',
+			'message' => $message,
+			'htmlVariables' => array(
+				'message' => nl2br($message)
+			)
+		));
+		$this->assertTrue(!empty($id));
+		$result = $this->Email->testSentEmail();
+		$this->assertTrue(empty($result));
+		$result = $this->Email->sendNow($id);
+		$this->assertTrue($result);
+		$result = $this->Email->testSentEmail();
+		$this->assertTrue(!empty($result));
+		$this->assertTrue(!empty($result['text']));
+		$this->assertTrue(!empty($result['html']));
+
+		foreach(array('text', 'html') as $format) {
+			$result[$format] = preg_replace('/(<p>)?This email was sent .+?CakePHP Framework(,\s+http:\/\/(www\.)?cakephp\.org)?(<\/a><\/p>)?\.?/si', '', $result[$format]);
+		}
+
+		$resultText = array_values(array_filter(array_map('trim', split("\n", $result['text']))));
+		$expected = array(
+			'Dear Claudia Mansilla,',
+			'We\'d like to welcome you to Cricava School.',
+			'Click here to login: ' . Router::url('/users/login', true),
+			'Personal message',
+			'with two lines'
+		);
+		$this->assertEqual($resultText, $expected);
+
+		$resultHtml = $result['html'];
+		$resultHtml = preg_replace('/^.*?<body>(.+?)<\/body>.*$/si', '\\1', $result['html']);
+		$resultHtml = array_values(array_filter(array_map('trim', split("\n", $resultHtml))));
+		$expected = array(
+			'<p>Dear Claudia Mansilla,</p>',
+			'<p>We\'d like to welcome you to Cricava School.</p>',
+			'<p><a href="' . Router::url('/users/login', true) . '">Click here to login: ' . Router::url('/users/login', true).'</a></p>',
+			'<p>Personal message<br />',
+			'with two lines</p>'
+		);
+		$this->assertEqual($resultHtml, $expected);
+
 	}
 }
 ?>
