@@ -408,7 +408,8 @@ class Email extends EmailAppModel {
 
 		if (!empty($email[$this->alias]['email_template_id']) && empty($email['EmailTemplate']['key'])) {
 			$emailTemplate = $this->EmailTemplate->find('first', array(
-				'conditions' => array('EmailTemplate.id' => $email[$this->alias]['email_template_id'])
+				'conditions' => array('EmailTemplate.id' => $email[$this->alias]['email_template_id']),
+				'recursive' => -1
 			));
 			if (!empty($emailTemplate)) {
 				$email = array_merge($email, $emailTemplate);
