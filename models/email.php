@@ -15,8 +15,8 @@ class Email extends EmailAppModel {
 	 * @var array
 	 */
 	public $hasMany = array(
-		'Email.EmailAttachment',
-		'Email.EmailDestination'
+		'Email.EmailAttachment' => array('dependent' => true),
+		'Email.EmailDestination' => array('dependent' => true)
 	);
 
 	/**
