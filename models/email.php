@@ -6,7 +6,7 @@ class Email extends EmailAppModel {
 	 * @var array
 	 */
 	public $belongsTo = array(
-		'Email.EmailTemplate'
+		'EmailTemplate' => array('className' => 'Email.EmailTemplate')
 	);
 
 	/**
@@ -15,8 +15,8 @@ class Email extends EmailAppModel {
 	 * @var array
 	 */
 	public $hasMany = array(
-		'Email.EmailAttachment' => array('dependent' => true),
-		'Email.EmailDestination' => array('dependent' => true)
+		'EmailAttachment' => array('className' => 'Email.EmailAttachment', 'dependent'=>true),
+		'EmailDestination' => array('className' => 'Email.EmailDestination', 'dependent'=>true)
 	);
 
 	/**

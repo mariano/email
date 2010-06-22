@@ -6,6 +6,8 @@ class EmailAttachment extends EmailAppModel {
 	 * @var array
 	 * @access public
 	 */
-	public $belongsTo = array('Email');
+	public $belongsTo = array(
+		'Email' => array('className' => 'Email.Email')
+	);
 }
 ?>
