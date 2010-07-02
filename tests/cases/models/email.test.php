@@ -577,7 +577,6 @@ class EmailTest extends CakeTestCase {
 			'with two lines</p>'
 		);
 		$this->assertEqual($resultHtml, $expected);
-
 	}
 }
 ?>

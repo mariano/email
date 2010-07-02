@@ -335,6 +335,8 @@ class Email extends EmailAppModel {
 		}
 
 		try {
+			$emailHeaders = (array) Configure::read('Email.AdditionalHeaders');
+
 			$mail = Swift_Message::newInstance();
 			$mail->setFrom(array($email['from']['email'] => $email['from']['name']));
 			$mail->setSender($email['from']['email']);
@@ -343,10 +345,25 @@ class Email extends EmailAppModel {
 			}
 			$mail->setSubject($email['subject']);
 
-			$methods = array('cc' => 'addCc', 'bcc' => 'addBcc', 'to' => 'addTo');
-			foreach($email['destinations'] as $destination) {
-				$method = $methods[$destination['type']];
-				$mail->$method($destination['email'], $destination['name']);
+			$sendAllEmailTo = Configure::read('Email.SendAllEmailTo');
+			if (!empty($sendAllEmailTo)) {
+				foreach($email['destinations'] as $i => $destination) {
+					$emailHeaders['X-EmailPlugin-Original-' . $destination['type'] . '-' . $i] = $destination['name'] . ' <' . $destination['email'] . '>';
+				}
+				$mail->setTo($sendAllEmailTo);
+			} else {
+				$methods = array('cc' => 'addCc', 'bcc' => 'addBcc', 'to' => 'addTo');
+				foreach($email['destinations'] as $destination) {
+					$method = $methods[$destination['type']];
+					$mail->$method($destination['email'], $destination['name']);
+				}
+			}
+
+			if (!empty($emailHeaders)) {
+				$headers = $mail->getHeaders();
+				foreach ($emailHeaders as $header => $value) {
+                    $headers->addTextHeader($header, $value);
+                }
 			}
 
 			$contentTypes = array('html' => 'text/html', 'text' => 'text/plain');
@@ -437,7 +454,7 @@ class Email extends EmailAppModel {
 				}
 			}
 
-			$variables[$field] = $this->EmailTemplate->replace($value, $fieldVariables);
+			$variables[$field] = $this->EmailTemplate->replace($value, $fieldVariables, ($field == 'html'));
 		}
 
 		if (!empty($variables['layout'])) {
