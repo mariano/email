@@ -362,8 +362,8 @@ class Email extends EmailAppModel {
 			if (!empty($emailHeaders)) {
 				$headers = $mail->getHeaders();
 				foreach ($emailHeaders as $header => $value) {
-                    $headers->addTextHeader($header, $value);
-                }
+					$headers->addTextHeader($header, $value);
+				}
 			}
 
 			$contentTypes = array('html' => 'text/html', 'text' => 'text/plain');
