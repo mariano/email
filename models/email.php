@@ -313,28 +313,32 @@ class Email extends EmailAppModel {
 				return false;
 			}
 
-			switch($transport['type']) {
-				case 'mail':
-					$this->mailer = Swift_MailTransport::newInstance();
-				break;
-				case 'sendmail':
-					$this->mailer = Swift_SendmailTransport::newInstance($transport['command']);
-				break;
-				case 'smtp':
-					$this->mailer = Swift_SmtpTransport::newInstance();
-					$this->mailer->setHost($transport['host']);
-					$this->mailer->setPort($transport['port']);
-					if (!empty($transport['user'])) {
-						$this->mailer->setUsername($transport['user']);
-					}
-					if (!empty($transport['password'])) {
-						$this->mailer->setPassword($transport['password']);
-					}
-					if (!empty($transport['encryption'])) {
-						$this->mailer->setEncryption($transport['encryption']);
-					}
-					$this->mailer->start();
-				break;
+			try {
+				switch($transport['type']) {
+					case 'mail':
+						$this->mailer = Swift_MailTransport::newInstance();
+					break;
+					case 'sendmail':
+						$this->mailer = Swift_SendmailTransport::newInstance($transport['command']);
+					break;
+					case 'smtp':
+						$this->mailer = Swift_SmtpTransport::newInstance();
+						$this->mailer->setHost($transport['host']);
+						$this->mailer->setPort($transport['port']);
+						if (!empty($transport['user'])) {
+							$this->mailer->setUsername($transport['user']);
+						}
+						if (!empty($transport['password'])) {
+							$this->mailer->setPassword($transport['password']);
+						}
+						if (!empty($transport['encryption'])) {
+							$this->mailer->setEncryption($transport['encryption']);
+						}
+						$this->mailer->start();
+					break;
+				}
+			} catch(Exception $e) {
+				return false;
 			}
 		}
 
