@@ -300,7 +300,8 @@ class Email extends EmailAppModel {
 				'host' => null,
 				'port' => 25,
 				'user' => null,
-				'password' => null
+				'password' => null,
+				'encryption' => null
 			);
 
 			$settings = Configure::read('Email');
@@ -328,6 +329,9 @@ class Email extends EmailAppModel {
 					}
 					if (!empty($transport['password'])) {
 						$this->mailer->setPassword($transport['password']);
+					}
+					if (!empty($transport['encryption'])) {
+						$this->mailer->setEncryption($transport['encryption']);
 					}
 					$this->mailer->start();
 				break;
