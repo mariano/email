@@ -82,9 +82,10 @@ class EmailTemplate extends EmailAppModel {
 	 *
 	 * @param string $content Text to replace
 	 * @param array $variables Replacement variables (variable => value)
+	 * @param boolean $escape Escape variables
 	 * @return string Replaced text
 	 */
-	public function replace($content, $variables = array()) {
+	public function replace($content, $variables = array(), $escape = false) {
 		if (empty($content)) {
 			return $content;
 		}
@@ -101,14 +102,31 @@ class EmailTemplate extends EmailAppModel {
 			$content = preg_replace_callback($pattern, $replacement, $content);
 		}
 
-		preg_match_all('/\${(.+?)}/', $content, $matches, PREG_SET_ORDER);
-		if (!empty($matches)) {
+		if ($escape) {
+			foreach($variables as $variable => $value) {
+				if (!is_string($value)) {
+					continue;
+				}
+
+				$value = trim($value);
+				if ($escape && !empty($value)) {
+					$value = htmlentities($value, ENT_QUOTES, Configure::read('App.encoding'));
+					$value = str_replace("\r", "\n", str_replace("\r\n", "\n", $value));
+					$value = nl2br($value);
+				}
+				$variables[$variable] = $value;
+			}
+		}
+
+		if (preg_match_all('/\${(.+?)}/', $content, $matches, PREG_SET_ORDER)) {
 			foreach($matches as $i => $match) {
 				$variable = strtolower($match[1]);
 				$content = str_replace($match[0], isset($variables[$variable]) ? $variables[$variable] : '', $content);
 			}
 		}
 
+		// Quick hack to remove links when the url data isn't available, until we have a proper templating engine
+		$content = preg_replace('%<a href="">([^<]+)</a>%', '\1', $content);
 		return $content;
 	}
 
