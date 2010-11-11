@@ -1,4 +1,24 @@
 <?php
+class EmailSendException extends Exception {
+	protected $mail;
+	protected $emails;
+
+	public function __construct($mail, $emails) {
+		parent::__construct(__('Could not send email', true));
+
+		$this->mail = $mail;
+		$this->emails = $emails;
+	}
+
+	public function getMail() {
+		return $this->mail;
+	}
+
+	public function getEmails() {
+		return $this->emails;
+	}
+}
+
 class Email extends EmailAppModel {
 	/**
 	 * belongsTo bindings
@@ -161,7 +181,9 @@ class Email extends EmailAppModel {
 		}
 
 		if ($scheduled === true) {
-			$this->sendNow($id);
+			try {
+				$this->sendNow($id);
+			} catch(Exception $e) { }
 		} else {
 			$this->schedule($id, !empty($scheduled) ? $scheduled : null);
 		}
@@ -195,7 +217,7 @@ class Email extends EmailAppModel {
 	 * Send the specified email
 	 *
 	 * @param string $id Email ID
-	 * @return bool Success
+	 * @throws Exception, EmailSendException
 	 */
 	public function sendNow($id) {
 		$email = $this->find('first', array(
@@ -203,12 +225,15 @@ class Email extends EmailAppModel {
 			'contain' => array('EmailDestination', 'EmailAttachment')
 		));
 		if (empty($email) || empty($email['EmailDestination'])) {
-			return false;
+			if (empty($email)) {
+				throw new Exception(sprintf(__('Could not find email with ID "%s"', true), $id));
+			}
+			throw new Exception(__('Could not find a destination to where to send the email', true));
 		}
 
 		$mail = $this->render($email);
 		if (empty($mail) || !is_array($mail)) {
-			return false;
+			throw new Exception(__('Unable to render email', true));
 		}
 
 		foreach(array('from', 'replyTo') as $key) {
@@ -232,11 +257,18 @@ class Email extends EmailAppModel {
 		}
 
 		$variables = $this->variables($email);
+
 		$result = $this->mail($mail);
+		$failedEmails = array();
+		if (is_array($result)) {
+			$failedEmails = $result;
+			$result = false;
+		}
 
 		if (empty($email[$this->alias]['failed'])) {
 			$email[$this->alias]['failed'] = 0;
 		}
+
 		if (!$result) {
 			$email[$this->alias]['failed'] += 1;
 		}
@@ -276,14 +308,16 @@ class Email extends EmailAppModel {
 			}
 		}
 
-		return $result;
+		if (!$result) {
+			throw new EmailSendException($mail, $failedEmails);
+		}
 	}
 
 	/**
 	 * Perform the actual email sending
 	 *
 	 * @param array $email Indexed array with: 'from', 'replyTo', 'destinations', 'subject', 'html', 'text', 'attachments'
-	 * @return bool Success
+	 * @return mixed true if success, or array with failing addresses if failed
 	 */
 	protected function mail($email) {
 		if (!isset($this->mailer)) {
@@ -291,7 +325,7 @@ class Email extends EmailAppModel {
 				define('SWIFT_LIB_DIRECTORY', dirname(dirname(__FILE__)) . DS . 'vendors' . DS . 'swift' . DS . 'lib');
 			}
 			if (!include_once(SWIFT_LIB_DIRECTORY . DS . 'swift_required.php')) {
-				return false;
+				throw new Exception(__('SWIFT library is not installed', true));
 			}
 
 			$transport = array(
@@ -310,95 +344,97 @@ class Email extends EmailAppModel {
 			}
 
 			if (!in_array($transport['type'], array('mail', 'sendmail', 'smtp'))) {
-				return false;
+				throw new Exception(sprintf(__('Can\'t recognize transport "%s"', true), $transport['type']));
 			}
 
-			try {
-				switch($transport['type']) {
-					case 'mail':
-						$this->mailer = Swift_MailTransport::newInstance();
-					break;
-					case 'sendmail':
-						$this->mailer = Swift_SendmailTransport::newInstance($transport['command']);
-					break;
-					case 'smtp':
-						$this->mailer = Swift_SmtpTransport::newInstance();
-						$this->mailer->setHost($transport['host']);
-						$this->mailer->setPort($transport['port']);
-						if (!empty($transport['user'])) {
-							$this->mailer->setUsername($transport['user']);
-						}
-						if (!empty($transport['password'])) {
-							$this->mailer->setPassword($transport['password']);
-						}
-						if (!empty($transport['encryption'])) {
-							$this->mailer->setEncryption($transport['encryption']);
-						}
-						$this->mailer->start();
-					break;
-				}
-			} catch(Exception $e) {
-				return false;
-			}
-		}
-
-		try {
-			$emailHeaders = (array) Configure::read('Email.AdditionalHeaders');
-
-			$mail = Swift_Message::newInstance();
-			$mail->setFrom(array($email['from']['email'] => $email['from']['name']));
-			$mail->setSender($email['from']['email']);
-			if (!empty($email['replyTo']) && !empty($email['replyTo']['email'])) {
-				$mail->setReplyTo(array($email['replyTo']['email'] => $email['replyTo']['name']));
-			}
-			$mail->setSubject($email['subject']);
-
-			$sendAllEmailTo = Configure::read('Email.SendAllEmailTo');
-			if (!empty($sendAllEmailTo)) {
-				foreach($email['destinations'] as $i => $destination) {
-					$emailHeaders['X-EmailPlugin-Original-' . $destination['type'] . '-' . $i] = $destination['name'] . ' <' . $destination['email'] . '>';
-				}
-				$mail->setTo($sendAllEmailTo);
-			} else {
-				$methods = array('cc' => 'addCc', 'bcc' => 'addBcc', 'to' => 'addTo');
-				foreach($email['destinations'] as $destination) {
-					$method = $methods[$destination['type']];
-					$mail->$method($destination['email'], $destination['name']);
-				}
-			}
-
-			if (!empty($emailHeaders)) {
-				$headers = $mail->getHeaders();
-				foreach ($emailHeaders as $header => $value) {
-					$headers->addTextHeader($header, $value);
-				}
-			}
-
-			$contentTypes = array('html' => 'text/html', 'text' => 'text/plain');
-			if (!empty($email['html']) && !empty($email['text'])) {
-				$mail->setBody($email['html'], $contentTypes['html']);
-				$mail->addPart($email['text'], $contentTypes['text']);
-			} else {
-				foreach($contentTypes as $type => $contentType) {
-					if (empty($email[$type])) {
-						continue;
+			switch($transport['type']) {
+				case 'mail':
+					$this->mailer = Swift_MailTransport::newInstance();
+				break;
+				case 'sendmail':
+					$this->mailer = Swift_SendmailTransport::newInstance($transport['command']);
+				break;
+				case 'smtp':
+					$this->mailer = Swift_SmtpTransport::newInstance();
+					$this->mailer->setHost($transport['host']);
+					$this->mailer->setPort($transport['port']);
+					if (!empty($transport['user'])) {
+						$this->mailer->setUsername($transport['user']);
 					}
-					$mail->setBody($email[$type], $contentType);
-				}
-			}
+					if (!empty($transport['password'])) {
+						$this->mailer->setPassword($transport['password']);
+					}
+					if (!empty($transport['encryption'])) {
+						$this->mailer->setEncryption($transport['encryption']);
+					}
 
-			if (!empty($email['attachments'])) {
-				foreach($email['attachments'] as $attachment) {
-					$mail->attach(Swift_Attachment::fromPath($attachment));
-				}
+					try {
+						$debug = Configure::read('debug');
+						Configure::write('debug', 0);
+						$this->mailer->start();
+						Configure::write('debug', $debug);
+					} catch(Exception $e) {
+						throw new Exception($e->getMessage());
+					}
+				break;
 			}
-
-			$result = ($this->mailer->send($mail) > 0);
-		} catch(Exception $e) {
-			$result = false;
 		}
 
-		return $result;
+		$emailHeaders = (array) Configure::read('Email.AdditionalHeaders');
+
+		$mail = Swift_Message::newInstance();
+		$mail->setFrom(array($email['from']['email'] => $email['from']['name']));
+		$mail->setSender($email['from']['email']);
+		if (!empty($email['replyTo']) && !empty($email['replyTo']['email'])) {
+			$mail->setReplyTo(array($email['replyTo']['email'] => $email['replyTo']['name']));
+		}
+		$mail->setSubject($email['subject']);
+
+		$sendAllEmailTo = Configure::read('Email.SendAllEmailTo');
+		if (!empty($sendAllEmailTo)) {
+			foreach($email['destinations'] as $i => $destination) {
+				$emailHeaders['X-EmailPlugin-Original-' . $destination['type'] . '-' . $i] = $destination['name'] . ' <' . $destination['email'] . '>';
+			}
+			$mail->setTo($sendAllEmailTo);
+		} else {
+			$methods = array('cc' => 'addCc', 'bcc' => 'addBcc', 'to' => 'addTo');
+			foreach($email['destinations'] as $destination) {
+				$method = $methods[$destination['type']];
+				$mail->$method($destination['email'], $destination['name']);
+			}
+		}
+
+		if (!empty($emailHeaders)) {
+			$headers = $mail->getHeaders();
+			foreach ($emailHeaders as $header => $value) {
+				$headers->addTextHeader($header, $value);
+			}
+		}
+
+		$contentTypes = array('html' => 'text/html', 'text' => 'text/plain');
+		if (!empty($email['html']) && !empty($email['text'])) {
+			$mail->setBody($email['html'], $contentTypes['html']);
+			$mail->addPart($email['text'], $contentTypes['text']);
+		} else {
+			foreach($contentTypes as $type => $contentType) {
+				if (empty($email[$type])) {
+					continue;
+				}
+				$mail->setBody($email[$type], $contentType);
+			}
+		}
+
+		if (!empty($email['attachments'])) {
+			foreach($email['attachments'] as $attachment) {
+				$mail->attach(Swift_Attachment::fromPath($attachment));
+			}
+		}
+
+		if (!$this->mailer->send($mail, $failures)) {
+			return $failures;
+		}
+
+		return true;
 	}
 
 	/**

@@ -1,4 +1,6 @@
 <?php
+ORM::import('Email.Email');
+
 class EmailsController extends EmailAppController {
 	public $uses = array('Email.Email');
 	/**
@@ -11,7 +13,23 @@ class EmailsController extends EmailAppController {
 			$this->redirect('/');
 		}
 
-		return $this->Email->sendNow($this->params['robot']['id']);
+		$debug = null;
+		try {
+			$this->Email->sendNow($this->params['robot']['id']);
+		} catch(EmailSendException $e) {
+			$debug = array(
+				'message' => $e->getMessage(),
+				'mail' => $e->getMail(),
+				'emails' => $e->getEmails()
+			);
+		} catch(Exception $e) {
+			$debug = $e->getMessage();
+		}
+
+		if ($debug) {
+			Configure::write('Robot.debug', $debug);
+			return false;
+		}
 	}
 }
 ?>
