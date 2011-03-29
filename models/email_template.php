@@ -89,27 +89,8 @@ class EmailTemplate extends EmailAppModel {
 		if (empty($content)) {
 			return $content;
 		}
-    
-    $variables = Set::flatten($variables);
-    
-    /**
-     * On the fly profile modifications. If the user is not an admin and
-     * the profile has been deleted, disable the URL and alter the name.
-     * See Case 3353.
-     */
-    if( isset( $variables['Trigger.Profile.deleted'] ) && $variables['Trigger.Profile.deleted'] ) {
-        if( !Configure::read( 'Account.is_admin' ) ) {
-            $variables['Trigger.Profile.url']       = '';
-            $variables['Trigger.Profile.firstname'] = 'Inactive';
-            $variables['Trigger.Profile.lastname']  = 'User';
-            $variables['Trigger.Profile.fullname']  = 'Inactive User';
-            $variables['Trigger.Profile.username']  = 'Inactive User';
-        } else {
-            $variables['Trigger.Profile.fullname'] .= ' (inactive)';
-            $variables['Trigger.Profile.username'] .= ' (inactive)';
-        }
-    }
-    
+
+		$variables = Set::flatten($variables);
 		foreach($variables as $key => $value) {
 			unset($variables[$key]);
 			$variables[strtolower($key)] = $value;
@@ -117,11 +98,10 @@ class EmailTemplate extends EmailAppModel {
 		$replacementCallbacks = array(
 			'/\$\{\s*url\s*\(([^\)]+)\s*\)\s*\}/i' => create_function('$matches', 'return Router::url($matches[1], true);')
 		);
-    
 		foreach($replacementCallbacks as $pattern => $replacement) {
-      $content = preg_replace_callback($pattern, $replacement, $content);
+			$content = preg_replace_callback($pattern, $replacement, $content);
 		}
-    
+
 		if ($escape) {
 			foreach($variables as $variable => $value) {
 				if (!is_string($value)) {
@@ -137,14 +117,14 @@ class EmailTemplate extends EmailAppModel {
 				$variables[$variable] = $value;
 			}
 		}
-    
+
 		if (preg_match_all('/\${(.+?)}/', $content, $matches, PREG_SET_ORDER)) {
 			foreach($matches as $i => $match) {
 				$variable = strtolower($match[1]);
 				$content = str_replace($match[0], isset($variables[$variable]) ? $variables[$variable] : '', $content);
 			}
 		}
-    
+
 		// Quick hack to remove links when the url data isn't available, until we have a proper templating engine
 		$content = preg_replace('%<a href="">([^<]+)</a>%', '\1', $content);
 		return $content;
