@@ -482,6 +482,8 @@ class Email extends EmailAppModel {
 		}
 
 		$variables = $this->variables($email, $variables);
+        $escape = isset($variables['escape']) ? $variables['escape'] : null;
+
 		foreach($variables as $field => $value) {
 			if (!is_string($value)) {
 				continue;
@@ -498,7 +500,11 @@ class Email extends EmailAppModel {
 				}
 			}
 
-			$variables[$field] = $this->EmailTemplate->replace($value, $fieldVariables, ($field == 'html'));
+			$variables[$field] = $this->EmailTemplate->replace(
+                $value,
+                $fieldVariables,
+                is_null($escape) ? ($field === 'html') : $escape
+            );
 		}
 
 		if (!empty($variables['layout'])) {

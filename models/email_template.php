@@ -137,14 +137,13 @@ class EmailTemplate extends EmailAppModel {
 	 */
 	public function layouts() {
 		$layouts = array();
-		$configure = Configure::getInstance();
 		$layoutPaths = array('email' . DS . 'text', 'email' . DS . 'html');
 		if (!empty($type)) {
 			$layoutPaths = array('email' . DS . $type);
 		}
 
-		$viewPaths = $configure->viewPaths;
-		$pluginPaths = $configure->pluginPaths;
+		$viewPaths = App::path('views');
+		$pluginPaths = App::path('plugins');
 		foreach($pluginPaths as $pluginPath) {
 			$viewPaths[] = $pluginPath . 'email' . DS . 'views' . DS;
 		}
@@ -184,14 +183,13 @@ class EmailTemplate extends EmailAppModel {
 			}
 		}
 
-		$configure = Configure::getInstance();
 		$layoutPaths = array('email' . DS . 'text', 'email' . DS . 'html');
 		if (!empty($type)) {
 			$layoutPaths = array('email' . DS . $type);
 		}
 
-		$viewPaths = $configure->viewPaths;
-		$pluginPaths = $configure->pluginPaths;
+		$viewPaths = App::path('views');
+		$pluginPaths = App::path('plugins');
 		foreach($pluginPaths as $pluginPath) {
 			$viewPaths[] = $pluginPath . 'email' . DS . 'views' . DS;
 		}

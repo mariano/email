@@ -210,8 +210,7 @@ class EmailTest extends CakeTestCase {
 
 	public function testSendNow() {
 		$id = '44c3eae2-e608-102c-9d65-00138fbbb402';
-		$result = $this->Email->sendNow($id);
-		$this->assertTrue($result);
+		$this->Email->sendNow($id);
 
 		$result = $this->Email->testSentEmail();
 		$this->assertTrue(!empty($result));
@@ -241,8 +240,7 @@ class EmailTest extends CakeTestCase {
 		$this->assertTrue(!empty($id));
 		$result = $this->Email->testSentEmail();
 		$this->assertTrue(empty($result));
-		$result = $this->Email->sendNow($id);
-		$this->assertTrue($result);
+		$this->Email->sendNow($id);
 		$result = $this->Email->testSentEmail();
 		$this->assertTrue(!empty($result));
 		$this->assertEqual($result['from']['name'], 'site@email.com');
@@ -331,8 +329,7 @@ class EmailTest extends CakeTestCase {
 		$this->assertTrue(!empty($id));
 		$result = $this->Email->testSentEmail();
 		$this->assertTrue(empty($result));
-		$result = $this->Email->sendNow($id);
-		$this->assertTrue($result);
+		$this->Email->sendNow($id);
 		$result = $this->Email->testSentEmail();
 		$this->assertTrue(!empty($result));
 		$this->assertEqual($result['from']['name'], 'site@email.com');
@@ -403,7 +400,7 @@ class EmailTest extends CakeTestCase {
 		$this->assertEqual($result['destinations'][0]['name'], 'jose@email.com');
 		$this->assertEqual($result['destinations'][0]['email'], 'jose@email.com');
 		$this->assertTrue(empty($result['text']));
-		$this->assertPattern('/<title[^>]*>.+?<\/title>/i', $result['html']);
+		$this->assertPattern('/<title[^>]*>.*?<\/title>/i', $result['html']);
 		$result = array_values(array_filter(array_map('trim', split("\n", strip_tags(preg_replace('/<head[^>]*>.+<\/head>/si', '', $result['html']))))));
 		$expected = array(
 			'Dear Jose Iglesias,',
@@ -501,8 +498,7 @@ class EmailTest extends CakeTestCase {
 		$this->assertTrue(!empty($id));
 		$result = $this->Email->testSentEmail();
 		$this->assertTrue(empty($result));
-		$result = $this->Email->sendNow($id);
-		$this->assertTrue($result);
+		$this->Email->sendNow($id);
 		$result = $this->Email->testSentEmail();
 		$this->assertTrue(!empty($result));
 		$this->assertTrue(!empty($result['text']));
@@ -538,6 +534,7 @@ class EmailTest extends CakeTestCase {
 			'name' => 'Claudia Mansilla',
 			'school' => 'Cricava School',
 			'message' => $message,
+            'escape' => false,
 			'htmlVariables' => array(
 				'message' => nl2br($message)
 			)
@@ -545,8 +542,7 @@ class EmailTest extends CakeTestCase {
 		$this->assertTrue(!empty($id));
 		$result = $this->Email->testSentEmail();
 		$this->assertTrue(empty($result));
-		$result = $this->Email->sendNow($id);
-		$this->assertTrue($result);
+		$this->Email->sendNow($id);
 		$result = $this->Email->testSentEmail();
 		$this->assertTrue(!empty($result));
 		$this->assertTrue(!empty($result['text']));
