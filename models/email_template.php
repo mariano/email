@@ -35,7 +35,7 @@ class EmailTemplate extends EmailAppModel {
         if (!empty($i18n)) {
             if (!is_array($i18n)) {
                 $i18n = array('enabled' => !empty($i18n));
-            } else if (Set::numeric($i18n)) {
+            } else if (Set::numeric(array_keys($i18n))) {
                 $i18n = array('enabled' => true, 'fields' => $i18n);
             }
 
