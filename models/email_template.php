@@ -1,6 +1,11 @@
 <?php
 App::import('Core', 'Router');
 
+class EmailTemplateI18n extends EmailAppModel {
+    public $useTable = 'email_template_i18n';
+    public $displayField = 'field';
+}
+
 class EmailTemplate extends EmailAppModel {
 	/**
 	 * Validation rules
@@ -24,6 +29,31 @@ class EmailTemplate extends EmailAppModel {
 			)))
 		)
 	);
+
+	public function __construct($id = false, $table = null, $ds = null) {
+        $i18n = Configure::read('Email.i18n');
+        if (!empty($i18n)) {
+            if (!is_array($i18n)) {
+                $i18n = array('enabled' => !empty($i18n));
+            } else if (Set::numeric($i18n)) {
+                $i18n = array('enabled' => true, 'fields' => $i18n);
+            }
+
+            $i18n = Set::merge(array(
+                'enabled' => false,
+                'fields' => array('subject', 'html', 'text'),
+                'model' => 'EmailTemplateI18n',
+                'table' => 'email_template_i18n'
+            ), $i18n);
+
+            if ($i18n['enabled']) {
+                $this->translateModel = $i18n['model'];
+                $this->translateTable = $i18n['table'];
+                $this->actsAs['Translate'] = $i18n['fields'];
+            }
+        }
+        parent::__construct($id, $table, $ds);
+    }
 
 	/**
 	 * Checks if value is a valid email layout
