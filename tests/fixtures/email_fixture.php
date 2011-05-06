@@ -4,6 +4,7 @@ class EmailFixture extends CakeTestFixture {
 	public $fields = array(
 		'id' => array('type' => 'string', 'length' => 36, 'key' => 'primary'),
 		'email_template_id' => array('type' => 'string', 'length' => 36, 'null' => true),
+		'template' => array('type' => 'string', 'length' => 255, 'null' => true),
 		'from_name' => array('type' => 'string', 'length' => 255, 'null' => true),
 		'from_email' => array('type' => 'string', 'length' => 255),
 		'subject' => array('type' => 'string', 'length' => 255),

@@ -7,6 +7,13 @@ class EmailTemplateI18n extends EmailAppModel {
 }
 
 class EmailTemplate extends EmailAppModel {
+    /**
+     * Template engine. Can be overriden with configure variable Email.templateEngine
+     *
+     * @var string
+     */
+    public $engine = 'db';
+
 	/**
 	 * Validation rules
 	 *
@@ -52,6 +59,16 @@ class EmailTemplate extends EmailAppModel {
                 $this->actsAs['Translate'] = $i18n['fields'];
             }
         }
+
+        $engine = Configure::read('Email.templateEngine');
+        if (!empty($engine) && in_array($engine, array('cake', 'db'))) {
+            $this->engine = $engine;
+        }
+
+        if ($this->engine !== 'db') {
+            $this->useTable = false;
+        }
+
         parent::__construct($id, $table, $ds);
     }
 
@@ -70,6 +87,61 @@ class EmailTemplate extends EmailAppModel {
 		return in_array($value, $this->layouts());
 	}
 
+    /**
+     * Get EmailTemplate with given key
+     *
+     * @param string $key
+     * @param mixed $variables If not false, render with variables (only when engine !== 'db')
+     * @return array EmailTemplate
+     */
+    public function get($key, $variables = false) {
+        if ($this->engine === 'db') {
+            $emailTemplate = $this->EmailTemplate->find('first', array(
+                'conditions' => array('EmailTemplate.key' => $key),
+                'recursive' => -1
+            ));
+        } else {
+            $emailTemplate = array('EmailTemplate' => array(
+                'key' => $key,
+                'from_name' => null,
+                'from_email' => null,
+                'layout' => null,
+                'subject' => null,
+                'html' => null,
+                'text' => null
+            ));
+
+            if ($variables !== false) {
+                $basePath = Configure::read('Email.templatePath');
+                if (empty($basePath)) {
+                    $basePath = 'elements';
+                }
+
+                $View = $this->getView();
+                foreach(array('html', 'text') as $type) {
+                    $path = $this->path($key, $type, $basePath);
+                    if (file_exists($path)) {
+                        $emailTemplate[$this->alias][$type] = $View->element($path, !empty($variables) ? (array) $variables : array());
+                        foreach($View->viewVars as $var => $value) {
+                            if ($var === 'from') {
+                                if (preg_match('/^(.+)\s*<([^>]+)>$/', trim($value), $matches)) {
+                                    $emailTemplate['EmailTemplate']['from_name'] = $matches[1];
+                                    $emailTemplate['EmailTemplate']['from_email'] = $matches[2];
+                                } else {
+                                    $emailTemplate['EmailTemplate']['from_name'] = null;
+                                    $emailTemplate['EmailTemplate']['from_email'] = $value;
+                                }
+                            } elseif (in_array($var, array('layout', 'subject'))) {
+                                $emailTemplate['EmailTemplate'][$var] = trim($value);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        return $emailTemplate;
+    }
+
 	/**
 	 * Render content within given layout
 	 *
@@ -81,30 +153,16 @@ class EmailTemplate extends EmailAppModel {
 	 * @return string Content
 	 */
 	public function renderLayout($content, $layout, $type, $variables = array(), $parameters = array()) {
-		$layout = $this->layoutPath($layout, $type);
+		$layout = $this->path($layout, $type);
 		if (empty($layout)) {
 			return $content;
 		}
 
-		if (empty($this->View)) {
-			if (!App::import('View', 'Email.Email')) {
-				return $content;
-			}
-
-			$controller = null;
-			$this->View = new EmailView($controller, false);
-			$this->View->webroot = !empty($parameters['webroot']) ? $parameters['webroot'] : '/';
-		}
-
-		if (isset($parameters['title'])) {
-			$this->View->pageTitle = $parameters['title'];
-		}
-
+        $View = $this->getView($parameters);
 		if (!empty($variables)) {
-			$this->View->set($variables);
+			$View->set($variables);
 		}
-
-		return $this->View->renderLayout($content, $layout);
+		return $View->renderLayout($content, $layout);
 	}
 
 	/**
@@ -199,45 +257,80 @@ class EmailTemplate extends EmailAppModel {
 	/**
 	 * Get email layout path for given layout, and given type.
 	 *
-	 * @param string $layout Layout name
+	 * @param string $name Layout/View name
 	 * @param string $type Either 'html', or 'text', or null to see if at least one is there
+     * @param string $baseName Main directory name
 	 * @return string Path, or null if not found
 	 */
-	public function layoutPath($layout, $type = 'html') {
-		$layoutPath = null;
-
+	protected function path($name, $type = 'html', $baseName = 'layouts') {
+		$path = null;
 		if (!empty($type)) {
 			$type = strtolower($type);
 			if (!in_array($type, array('html', 'text'))) {
-				return $layoutPath;
+				return $path;
 			}
 		}
 
-		$layoutPaths = array('email' . DS . 'text', 'email' . DS . 'html');
+		$paths = array('email'.DS.'text', 'email'.DS.'html');
 		if (!empty($type)) {
-			$layoutPaths = array('email' . DS . $type);
+			$paths = array('email'.DS.$type);
 		}
 
-		$viewPaths = App::path('views');
-		$pluginPaths = App::path('plugins');
-		foreach($pluginPaths as $pluginPath) {
-			$viewPaths[] = $pluginPath . 'email' . DS . 'views' . DS;
-		}
+        if ($baseName === 'layouts') {
+            $viewPaths = App::path('views');
+            $pluginPaths = App::path('plugins');
+            foreach($pluginPaths as $pluginPath) {
+                $viewPaths[] = $pluginPath.'email'.DS.'views'.DS;
+            }
+        } elseif ($baseName === 'elements') {
+            $viewPaths = array();
+            foreach(App::path('views') as $viewPath) {
+                $viewPaths[] = $viewPath.'elements'.DS;
+            }
+            $pluginPaths = App::path('plugins');
+            foreach($pluginPaths as $pluginPath) {
+                $viewPaths[] = $pluginPath.'email'.DS.'views'.DS.'elements'.DS;
+            }
+            $baseName = null;
+        } else {
+            $viewPaths = array(dirname($baseName).DS);
+            $baseName = basename($baseName);
+        }
 
 		foreach($viewPaths as $viewPath) {
-			foreach($layoutPaths as $currentLayoutPath) {
-				$candidate = $viewPath . 'layouts' . DS . $currentLayoutPath . DS . $layout . '.ctp';
+			foreach($paths as $currentLayoutPath) {
+				$candidate = $viewPath.(!empty($baseName) ? $baseName.DS : '').$currentLayoutPath.DS.$name.'.ctp';
 				if (is_file($candidate)) {
-					$layoutPath = $candidate;
+					$path = $candidate;
 					break;
 				}
 			}
-			if (!empty($layoutPath)) {
+			if (!empty($path)) {
 				break;
 			}
 		}
 
-		return $layoutPath;
+		return $path;
 	}
+
+    /**
+     * Get view for rendering
+     *
+	 * @param array $parameters Parameters (title, webroot)
+     * @return object View
+     */
+    protected function getView($parameters = array()) {
+		if (empty($this->View)) {
+			if (!App::import('View', 'Email.Email')) {
+				return $content;
+			}
+
+			$controller = null;
+			$this->View = new EmailView($controller, false);
+		}
+        $this->View->webroot = !empty($parameters['webroot']) ? $parameters['webroot'] : '/';
+		$this->View->pageTitle = !empty($parameters['title']) ? $parameters['title'] :'';
+        return $this->View;
+    }
 }
 ?>
