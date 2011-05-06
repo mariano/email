@@ -44,14 +44,14 @@ class Email extends EmailAppModel {
 	 *
 	 * @var array
 	 */
-	private $compress = array('variables', 'html', 'text');
+	protected $compress = array('variables', 'html', 'text');
 
 	/**
 	 * Mailer
 	 *
 	 * @var object
 	 */
-	private $mailer;
+	protected $mailer;
 
 	/**
 	 * Constructor. Binds the model's database table to the object.
@@ -61,16 +61,19 @@ class Email extends EmailAppModel {
 	 * @param object $ds DataSource connection object.
 	 */
 	public function __construct($id = false, $table = null, $ds = null) {
-		parent::__construct($id, $table, $ds);
 		$compress = Configure::read('Email.compress');
 		if (is_null($compress)) {
 			$compress = $this->compress;
 		}
-		if (!empty($compress) && App::import('Behavior', 'Syrup.Compressible')) {
-			$this->Behaviors->attach('Syrup.Compressible', $compress);
-		}
+
 		foreach($this->hasMany as $key => $binding) {
 			$this->hasMany[$key]['dependent'] = true;
+		}
+
+		parent::__construct($id, $table, $ds);
+
+		if (!empty($compress) && App::import('Behavior', 'Syrup.Compressible')) {
+			$this->Behaviors->attach('Syrup.Compressible', $compress);
 		}
 	}
 
@@ -138,383 +141,400 @@ class Email extends EmailAppModel {
 
 		$emailTemplate = null;
 		if (!empty($key)) {
-			$emailTemplate = $this->EmailTemplate->find('first', array(
-				'conditions' => array('EmailTemplate.key' => $key),
-				'recursive' => -1
-			));
-			if (empty($emailTemplate)) {
-				return false;
-			}
-		}
+            $emailTemplate = $this->EmailTemplate->get($key);
+            if (empty($emailTemplate)) {
+                return false;
+            }
+        }
 
-		$email = array($this->alias => array(
-			'email_template_id' => !empty($emailTemplate) ? $emailTemplate['EmailTemplate']['id'] : null,
-			'queued' => date('Y-m-d H:i:s'),
-			'variables' => serialize(array_diff_key($variables, array('attachments'=>true, 'to'=>true, 'cc'=>true, 'bcc'=>true)))
-		));
+        $email = array($this->alias => array(
+            'queued' => date('Y-m-d H:i:s'),
+            'variables' => serialize(array_diff_key($variables, array('attachments'=>true, 'to'=>true, 'cc'=>true, 'bcc'=>true)))
+        ));
 
-		$this->create();
-		if (!$this->save($email)) {
-			return false;
-		}
+        if ($this->EmailTemplate->engine === 'db') {
+            $email[$this->alias]['email_template_id'] = !empty($emailTemplate) ? $emailTemplate['EmailTemplate']['id'] : null;
+        } else {
+            $email[$this->alias]['template'] = !empty($emailTemplate) ? $emailTemplate['EmailTemplate']['key'] : null;
+        }
 
-		$id = $this->id;
+        $this->create();
+        if (!$this->save($email)) {
+            return false;
+        }
 
-		foreach($destinations as $type => $people) {
-			foreach($people as $person) {
-				$this->EmailDestination->create();
-				$this->EmailDestination->save(array('EmailDestination' => array(
-					'email_id' => $id,
-					'type' => $type,
-					'name' => $person['name'],
-					'email' => $person['email']
-				)));
-			}
-		}
+        $id = $this->id;
 
-		foreach($attachments as $attachment) {
-			$this->EmailAttachment->create();
-			$this->EmailAttachment->save(array('EmailAttachment' => array(
-				'email_id' => $id,
-				'file' => $attachment
-			)));
-		}
+        foreach($destinations as $type => $people) {
+            foreach($people as $person) {
+                $this->EmailDestination->create();
+                $this->EmailDestination->save(array('EmailDestination' => array(
+                    'email_id' => $id,
+                    'type' => $type,
+                    'name' => $person['name'],
+                    'email' => $person['email']
+                )));
+            }
+        }
 
-		if ($scheduled === true) {
-			try {
-				$this->sendNow($id);
-			} catch(Exception $e) { }
-		} else {
-			$this->schedule($id, !empty($scheduled) ? $scheduled : null);
-		}
+        foreach($attachments as $attachment) {
+            $this->EmailAttachment->create();
+            $this->EmailAttachment->save(array('EmailAttachment' => array(
+                'email_id' => $id,
+                'file' => $attachment
+            )));
+        }
 
-		return $id;
-	}
+        if ($scheduled === true) {
+            try {
+                $this->sendNow($id);
+            } catch(Exception $e) { }
+        } else {
+            $this->schedule($id, !empty($scheduled) ? $scheduled : null);
+        }
 
-	/**
-	 * Schedules an email sending using Robot plugin
-	 *
-	 * @param string $id Email ID
-	 * @param mixed $scheduled A string to pass to strtotime(), or the time value
-	 * @return mixed Task ID, or false if error
-	 */
-	public function schedule($id, $scheduled = null) {
-		if (!isset($this->RobotTask)) {
-			$this->RobotTask = ClassRegistry::init('Robot.RobotTask');
-			if (!isset($this->RobotTask)) {
-				return false;
-			}
-		}
+        return $id;
+    }
 
-		return $this->RobotTask->schedule(
-			array('admin' => false, 'plugin' => 'email', 'controller' => 'emails', 'action' => 'send'),
-			compact('id'),
-			$scheduled
-		);
-	}
+    /**
+     * Schedules an email sending using Robot plugin
+     *
+     * @param string $id Email ID
+     * @param mixed $scheduled A string to pass to strtotime(), or the time value
+     * @return mixed Task ID, or false if error
+     */
+    public function schedule($id, $scheduled = null) {
+        if (!isset($this->RobotTask)) {
+            $this->RobotTask = ClassRegistry::init('Robot.RobotTask');
+            if (!isset($this->RobotTask)) {
+                return false;
+            }
+        }
 
-	/**
-	 * Send the specified email
-	 *
-	 * @param string $id Email ID
-	 * @throws Exception, EmailSendException
-	 */
-	public function sendNow($id) {
-		$email = $this->find('first', array(
-			'conditions' => array($this->alias . '.' . $this->primaryKey => $id),
-			'contain' => array('EmailDestination', 'EmailAttachment')
-		));
-		if (empty($email) || empty($email['EmailDestination'])) {
-			if (empty($email)) {
-				throw new Exception(sprintf(__('Could not find email with ID "%s"', true), $id));
-			}
-			throw new Exception(__('Could not find a destination to where to send the email', true));
-		}
+        return $this->RobotTask->schedule(
+            array('admin' => false, 'plugin' => 'email', 'controller' => 'emails', 'action' => 'send'),
+            compact('id'),
+            $scheduled
+        );
+    }
 
-		$mail = $this->render($email);
-		if (empty($mail) || !is_array($mail)) {
-			throw new Exception(__('Unable to render email', true));
-		}
+    /**
+     * Send the specified email
+     *
+     * @param string $id Email ID
+     * @throws Exception, EmailSendException
+     */
+    public function sendNow($id) {
+        $email = $this->find('first', array(
+            'conditions' => array($this->alias . '.' . $this->primaryKey => $id),
+            'contain' => array('EmailDestination', 'EmailAttachment')
+        ));
+        if (empty($email) || empty($email['EmailDestination'])) {
+            if (empty($email)) {
+                throw new Exception(sprintf(__('Could not find email with ID "%s"', true), $id));
+            }
+            throw new Exception(__('Could not find a destination to where to send the email', true));
+        }
 
-		foreach(array('from', 'replyTo') as $key) {
-			if (!empty($mail[$key]) && empty($mail[$key]['name'])) {
-				$mail[$key]['name'] = $mail[$key]['email'];
-			}
-		}
+        $mail = $this->render($email);
+        if (empty($mail) || !is_array($mail)) {
+            throw new Exception(__('Unable to render email', true));
+        }
 
-		$mail['destinations'] = array();
-		foreach($email['EmailDestination'] as $destination) {
-			$mail['destinations'][] = array(
-				'type' => $destination['type'],
-				'name' => !empty($destination['name']) ? $destination['name'] : $destination['email'],
-				'email' => $destination['email']
-			);
-		}
+        foreach(array('from', 'replyTo') as $key) {
+            if (!empty($mail[$key]) && empty($mail[$key]['name'])) {
+                $mail[$key]['name'] = $mail[$key]['email'];
+            }
+        }
 
-		$mail['attachments'] = array();
-		if (!empty($email['EmailAttachment'])) {
-			$mail['attachments'] = Set::extract($email['EmailAttachment'], '/file');
-		}
+        $mail['destinations'] = array();
+        foreach($email['EmailDestination'] as $destination) {
+            $mail['destinations'][] = array(
+                'type' => $destination['type'],
+                'name' => !empty($destination['name']) ? $destination['name'] : $destination['email'],
+                'email' => $destination['email']
+            );
+        }
 
-		$variables = $this->variables($email);
+        $mail['attachments'] = array();
+        if (!empty($email['EmailAttachment'])) {
+            $mail['attachments'] = Set::extract($email['EmailAttachment'], '/file');
+        }
 
-		$result = $this->mail($mail);
-		$failedEmails = array();
-		if (is_array($result)) {
-			$failedEmails = $result;
-			$result = false;
-		}
+        $variables = $this->variables($email);
 
-		if (empty($email[$this->alias]['failed'])) {
-			$email[$this->alias]['failed'] = 0;
-		}
+        $result = $this->mail($mail);
+        $failedEmails = array();
+        if (is_array($result)) {
+            $failedEmails = $result;
+            $result = false;
+        }
 
-		if (!$result) {
-			$email[$this->alias]['failed'] += 1;
-		}
+        if (empty($email[$this->alias]['failed'])) {
+            $email[$this->alias]['failed'] = 0;
+        }
 
-		$keep = Configure::read('Email.keep');
-		if (!$result || !empty($keep)) {
-			$email = array($this->alias => array(
-				'id' => $id,
-				'processed' => date('Y-m-d H:i:s'),
-				'failed' => $email[$this->alias]['failed'],
-				'sent' => ($result ? date('Y-m-d H:i:s') : null)
-			));
+        if (!$result) {
+            $email[$this->alias]['failed'] += 1;
+        }
 
-			$this->id = $id;
-			$this->save($email, true, array_keys($email[$this->alias]));
-		} else if ($result) {
-			$this->delete($id);
-		}
+        $keep = Configure::read('Email.keep');
+        if (!$result || !empty($keep)) {
+            $email = array($this->alias => array(
+                'id' => $id,
+                'processed' => date('Y-m-d H:i:s'),
+                'failed' => $email[$this->alias]['failed'],
+                'sent' => ($result ? date('Y-m-d H:i:s') : null)
+            ));
 
-		if (!empty($variables['callback'])) {
-			$url = $variables['callback'];
-			if (is_array($url)) {
-				$url = Router::url($url);
-			}
-			$url = str_ireplace(array('${id}', '${success}'), array($id, !empty($result) ? 1 : 0), $url);
-			$this->requestAction($url);
-		}
+            $this->id = $id;
+            $this->save($email, true, array_keys($email[$this->alias]));
+        } else if ($result) {
+            $this->delete($id);
+        }
 
-		$retry = $variables['retry'];
-		if (!$result && $retry['enabled'] && $email[$this->alias]['failed'] < $retry['max']) {
-  			if (!isset($this->RobotTask)) {
-				$this->RobotTask = ClassRegistry::init('Robot.RobotTask');
-			}
-			if (isset($this->RobotTask)) {
-				$scheduled = strtotime('now') + $retry['interval'][$email[$this->alias]['failed'] - 1];
-				$this->schedule($id, $scheduled);
-			}
-		}
+        if (!empty($variables['callback'])) {
+            $url = $variables['callback'];
+            if (is_array($url)) {
+                $url = Router::url($url);
+            }
+            $url = str_ireplace(array('${id}', '${success}'), array($id, !empty($result) ? 1 : 0), $url);
+            $this->requestAction($url);
+        }
 
-		if (!$result) {
-			throw new EmailSendException($mail, $failedEmails);
-		}
-	}
+        $retry = $variables['retry'];
+        if (!$result && $retry['enabled'] && $email[$this->alias]['failed'] < $retry['max']) {
+            if (!isset($this->RobotTask)) {
+                $this->RobotTask = ClassRegistry::init('Robot.RobotTask');
+            }
+            if (isset($this->RobotTask)) {
+                $scheduled = strtotime('now') + $retry['interval'][$email[$this->alias]['failed'] - 1];
+                $this->schedule($id, $scheduled);
+            }
+        }
 
-	/**
-	 * Perform the actual email sending
-	 *
-	 * @param array $email Indexed array with: 'from', 'replyTo', 'destinations', 'subject', 'html', 'text', 'attachments'
-	 * @return mixed true if success, or array with failing addresses if failed
-	 */
-	protected function mail($email) {
-		if (!isset($this->mailer)) {
-			if (!defined('SWIFT_LIB_DIRECTORY')) {
-				define('SWIFT_LIB_DIRECTORY', dirname(dirname(__FILE__)) . DS . 'vendors' . DS . 'swift' . DS . 'lib');
-			}
-			if (!include_once(SWIFT_LIB_DIRECTORY . DS . 'swift_required.php')) {
-				throw new Exception(__('SWIFT library is not installed', true));
-			}
+        if (!$result) {
+            throw new EmailSendException($mail, $failedEmails);
+        }
+    }
 
-			$transport = array(
-				'type' => 'mail',
-				'command' => null,
-				'host' => null,
-				'port' => 25,
-				'user' => null,
-				'password' => null,
-				'encryption' => null
-			);
+    /**
+     * Perform the actual email sending
+     *
+     * @param array $email Indexed array with: 'from', 'replyTo', 'destinations', 'subject', 'html', 'text', 'attachments'
+     * @return mixed true if success, or array with failing addresses if failed
+     */
+    protected function mail($email) {
+        if (!isset($this->mailer)) {
+            if (!defined('SWIFT_LIB_DIRECTORY')) {
+                define('SWIFT_LIB_DIRECTORY', dirname(dirname(__FILE__)) . DS . 'vendors' . DS . 'swift' . DS . 'lib');
+            }
+            if (!include_once(SWIFT_LIB_DIRECTORY . DS . 'swift_required.php')) {
+                throw new Exception(__('SWIFT library is not installed', true));
+            }
 
-			$settings = Configure::read('Email');
-			if (!empty($settings)) {
-				$transport = array_merge($transport, array_intersect_key($settings, $transport));
-			}
+            $transport = array(
+                'type' => 'mail',
+                'command' => null,
+                'host' => null,
+                'port' => 25,
+                'user' => null,
+                'password' => null,
+                'encryption' => null
+            );
 
-			if (!in_array($transport['type'], array('mail', 'sendmail', 'smtp'))) {
-				throw new Exception(sprintf(__('Can\'t recognize transport "%s"', true), $transport['type']));
-			}
+            $settings = Configure::read('Email');
+            if (!empty($settings)) {
+                $transport = array_merge($transport, array_intersect_key($settings, $transport));
+            }
 
-			switch($transport['type']) {
-				case 'mail':
-					$this->mailer = Swift_MailTransport::newInstance();
-				break;
-				case 'sendmail':
-					$this->mailer = Swift_SendmailTransport::newInstance($transport['command']);
-				break;
-				case 'smtp':
-					$this->mailer = Swift_SmtpTransport::newInstance();
-					$this->mailer->setHost($transport['host']);
-					$this->mailer->setPort($transport['port']);
-					if (!empty($transport['user'])) {
-						$this->mailer->setUsername($transport['user']);
-					}
-					if (!empty($transport['password'])) {
-						$this->mailer->setPassword($transport['password']);
-					}
-					if (!empty($transport['encryption'])) {
-						$this->mailer->setEncryption($transport['encryption']);
-					}
+            if (!in_array($transport['type'], array('mail', 'sendmail', 'smtp'))) {
+                throw new Exception(sprintf(__('Can\'t recognize transport "%s"', true), $transport['type']));
+            }
 
-					try {
-						$debug = Configure::read('debug');
-						Configure::write('debug', 0);
-						$this->mailer->start();
-						Configure::write('debug', $debug);
-					} catch(Exception $e) {
-						throw new Exception($e->getMessage());
-					}
-				break;
-			}
-		}
+            switch($transport['type']) {
+                case 'mail':
+                    $this->mailer = Swift_MailTransport::newInstance();
+                    break;
+                case 'sendmail':
+                    $this->mailer = Swift_SendmailTransport::newInstance($transport['command']);
+                    break;
+                case 'smtp':
+                    $this->mailer = Swift_SmtpTransport::newInstance();
+                    $this->mailer->setHost($transport['host']);
+                    $this->mailer->setPort($transport['port']);
+                    if (!empty($transport['user'])) {
+                        $this->mailer->setUsername($transport['user']);
+                    }
+                    if (!empty($transport['password'])) {
+                        $this->mailer->setPassword($transport['password']);
+                    }
+                    if (!empty($transport['encryption'])) {
+                        $this->mailer->setEncryption($transport['encryption']);
+                    }
 
-		$emailHeaders = (array) Configure::read('Email.AdditionalHeaders');
+                    try {
+                        $debug = Configure::read('debug');
+                        Configure::write('debug', 0);
+                        $this->mailer->start();
+                        Configure::write('debug', $debug);
+                    } catch(Exception $e) {
+                        throw new Exception($e->getMessage());
+                    }
+                    break;
+            }
+        }
 
-		$mail = Swift_Message::newInstance();
-		$mail->setFrom(array($email['from']['email'] => $email['from']['name']));
-		$mail->setSender($email['from']['email']);
-		if (!empty($email['replyTo']) && !empty($email['replyTo']['email'])) {
-			$mail->setReplyTo(array($email['replyTo']['email'] => $email['replyTo']['name']));
-		}
-		$mail->setSubject($email['subject']);
+        $emailHeaders = (array) Configure::read('Email.AdditionalHeaders');
 
-		$sendAllEmailTo = Configure::read('Email.SendAllEmailTo');
-		if (!empty($sendAllEmailTo)) {
-			foreach($email['destinations'] as $i => $destination) {
-				$emailHeaders['X-EmailPlugin-Original-' . $destination['type'] . '-' . $i] = $destination['name'] . ' <' . $destination['email'] . '>';
-			}
-			$mail->setTo($sendAllEmailTo);
-		} else {
-			$methods = array('cc' => 'addCc', 'bcc' => 'addBcc', 'to' => 'addTo');
-			foreach($email['destinations'] as $destination) {
-				$method = $methods[$destination['type']];
-				$mail->$method($destination['email'], $destination['name']);
-			}
-		}
+        $mail = Swift_Message::newInstance();
+        $mail->setFrom(array($email['from']['email'] => $email['from']['name']));
+        $mail->setSender($email['from']['email']);
+        if (!empty($email['replyTo']) && !empty($email['replyTo']['email'])) {
+            $mail->setReplyTo(array($email['replyTo']['email'] => $email['replyTo']['name']));
+        }
+        $mail->setSubject($email['subject']);
 
-		if (!empty($emailHeaders)) {
-			$headers = $mail->getHeaders();
-			foreach ($emailHeaders as $header => $value) {
-				$headers->addTextHeader($header, $value);
-			}
-		}
+        $sendAllEmailTo = Configure::read('Email.SendAllEmailTo');
+        if (!empty($sendAllEmailTo)) {
+            foreach($email['destinations'] as $i => $destination) {
+                $emailHeaders['X-EmailPlugin-Original-' . $destination['type'] . '-' . $i] = $destination['name'] . ' <' . $destination['email'] . '>';
+            }
+            $mail->setTo($sendAllEmailTo);
+        } else {
+            $methods = array('cc' => 'addCc', 'bcc' => 'addBcc', 'to' => 'addTo');
+            foreach($email['destinations'] as $destination) {
+                $method = $methods[$destination['type']];
+                $mail->$method($destination['email'], $destination['name']);
+            }
+        }
 
-		$contentTypes = array('html' => 'text/html', 'text' => 'text/plain');
-		if (!empty($email['html']) && !empty($email['text'])) {
-			$mail->setBody($email['html'], $contentTypes['html']);
-			$mail->addPart($email['text'], $contentTypes['text']);
-		} else {
-			foreach($contentTypes as $type => $contentType) {
-				if (empty($email[$type])) {
-					continue;
-				}
-				$mail->setBody($email[$type], $contentType);
-			}
-		}
+        if (!empty($emailHeaders)) {
+            $headers = $mail->getHeaders();
+            foreach ($emailHeaders as $header => $value) {
+                $headers->addTextHeader($header, $value);
+            }
+        }
 
-		if (!empty($email['attachments'])) {
-			foreach($email['attachments'] as $attachment) {
-				$mail->attach(Swift_Attachment::fromPath($attachment));
-			}
-		}
+        $contentTypes = array('html' => 'text/html', 'text' => 'text/plain');
+        if (!empty($email['html']) && !empty($email['text'])) {
+            $mail->setBody($email['html'], $contentTypes['html']);
+            $mail->addPart($email['text'], $contentTypes['text']);
+        } else {
+            foreach($contentTypes as $type => $contentType) {
+                if (empty($email[$type])) {
+                    continue;
+                }
+                $mail->setBody($email[$type], $contentType);
+            }
+        }
 
-		if (!$this->mailer->send($mail, $failures)) {
-			return $failures;
-		}
+        if (!empty($email['attachments'])) {
+            foreach($email['attachments'] as $attachment) {
+                $mail->attach(Swift_Attachment::fromPath($attachment));
+            }
+        }
 
-		return true;
-	}
+        if (!$this->mailer->send($mail, $failures)) {
+            return $failures;
+        }
 
-	/**
-	 * Render an email into an array with replaced variables
-	 *
-	 * @param mixed $email Either an Email ID, or array with email information
-	 * @param array $variables Replacement variables
-	 * @param bool $force If true, recompile body, otherwise look to see if it was already processed
-	 * @return array Array with indexes: 'from', 'subject', 'html', 'text'
-	 */
-	public function render($email, $variables = array(), $force = false) {
-		if (!is_array($email)) {
-			$email = $this->find('first', array(
-				'conditions' => array($this->alias . '.' . $this->primaryKey => $email),
-				'contain' => array('EmailTemplate')
-			));
-		} else if (empty($email[$this->alias])) {
-			$email = array($this->alias => $email);
-		}
+        return true;
+    }
 
-		if (!$force && (!empty($email[$this->alias]['html']) || !empty($email[$this->alias]['text']))) {
-			return array(
-				'from' => array(
-					'name' => $email[$this->alias]['from_name'],
-					'email' => $email[$this->alias]['from_email']
-				),
-				'subject' => $email[$this->alias]['subject'],
-				'html' => $email[$this->alias]['html'],
-				'text' => $email[$this->alias]['text']
-			);
-		}
+    /**
+     * Render an email into an array with replaced variables
+     *
+     * @param mixed $email Either an Email ID, or array with email information
+     * @param array $variables Replacement variables
+     * @param bool $force If true, recompile body, otherwise look to see if it was already processed
+     * @return array Array with indexes: 'from', 'subject', 'html', 'text'
+     */
+    public function render($email, $variables = array(), $force = false) {
+        if (!is_array($email)) {
+            $findOptions = array();
+            if ($this->EmailTemplate->engine === 'db') {
+                $findOptions['contain'] = array('EmailTemplate');
+            } else {
+                $findOptions['recursive'] = -1;
+            }
+            $email = $this->find('first', array_merge($findOptions, array(
+                'conditions' => array($this->alias . '.' . $this->primaryKey => $email)
+            )));
+        } else if (empty($email[$this->alias])) {
+            $email = array($this->alias => $email);
+        }
 
-		if (!empty($email[$this->alias]['email_template_id']) && empty($email['EmailTemplate']['key'])) {
-			$emailTemplate = $this->EmailTemplate->find('first', array(
-				'conditions' => array('EmailTemplate.id' => $email[$this->alias]['email_template_id']),
-				'recursive' => -1
-			));
-			if (!empty($emailTemplate)) {
-				$email = array_merge($email, $emailTemplate);
-			}
-		}
+        if (!$force && (!empty($email[$this->alias]['html']) || !empty($email[$this->alias]['text']))) {
+            return array(
+                'from' => array(
+                    'name' => $email[$this->alias]['from_name'],
+                    'email' => $email[$this->alias]['from_email']
+                    ),
+                'subject' => $email[$this->alias]['subject'],
+                'html' => $email[$this->alias]['html'],
+                'text' => $email[$this->alias]['text']
+            );
+        }
 
-		if (empty($email)) {
-			return false;
-		}
+        if (empty($email['EmailTemplate']['key'])) {
+            $emailTemplate = null;
+            if ($this->EmailTemplate->engine === 'db' && !empty($email[$this->alias]['email_template_id'])) {
+                $emailTemplate = $this->EmailTemplate->find('first', array(
+                    'conditions' => array('EmailTemplate.id' => $email[$this->alias]['email_template_id']),
+                    'recursive' => -1
+                ));
+            } elseif ($this->EmailTemplate->engine !== 'db' && !empty($email[$this->alias]['template'])) {
+                $emailVariables = array();
+                if (!empty($email[$this->alias]['variables'])) {
+                    $emailVariables = (array) unserialize($email[$this->alias]['variables']);
+                }
 
-		$variables = $this->variables($email, $variables);
+                $emailTemplate = $this->EmailTemplate->get($email[$this->alias]['template'], $emailVariables);
+            }
+            if (!empty($emailTemplate)) {
+                $email = array_merge($email, $emailTemplate);
+            }
+        }
+
+        if (empty($email)) {
+            return false;
+        }
+
+        $variables = $this->variables($email, $variables);
         $escape = isset($variables['escape']) ? $variables['escape'] : null;
 
-		foreach($variables as $field => $value) {
-			if (!is_string($value)) {
-				continue;
-			}
+        foreach($variables as $field => $value) {
+            if (!is_string($value)) {
+                continue;
+            }
 
-			$fieldVariables = $variables;
-			if (in_array($field, array('html', 'text'))) {
-				$formatVariablesKey = $field.'Variables';
-				if (array_key_exists($formatVariablesKey, $fieldVariables)) {
-					$fieldVariables = Set::merge(
-						array_diff_key($fieldVariables, array('htmlVariables'=>null, 'textVariables'=>null)),
-						$fieldVariables[$formatVariablesKey]
-					);
-				}
-			}
+            $fieldVariables = $variables;
+            if (in_array($field, array('html', 'text'))) {
+                $formatVariablesKey = $field.'Variables';
+                if (array_key_exists($formatVariablesKey, $fieldVariables)) {
+                    $fieldVariables = Set::merge(
+                        array_diff_key($fieldVariables, array('htmlVariables'=>null, 'textVariables'=>null)),
+                        $fieldVariables[$formatVariablesKey]
+                    );
+                }
+            }
 
-			$variables[$field] = $this->EmailTemplate->replace(
+            $variables[$field] = $this->EmailTemplate->replace(
                 $value,
                 $fieldVariables,
                 is_null($escape) ? ($field === 'html') : $escape
             );
-		}
+        }
 
-		if (!empty($variables['layout'])) {
-			foreach(array('html', 'text') as $type) {
-				if (empty($variables[$type])) {
-					continue;
-				}
+        if (!empty($variables['layout'])) {
+            foreach(array('html', 'text') as $type) {
+                if (empty($variables[$type])) {
+                    continue;
+                }
 
-				$parameters = array(
-					'title' => !empty($variables['subject']) ? $variables['subject'] : ''
+                $parameters = array(
+                    'title' => !empty($variables['subject']) ? $variables['subject'] : ''
 				);
 
 				$variables[$type] = $this->EmailTemplate->renderLayout(
