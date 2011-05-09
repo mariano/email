@@ -688,6 +688,45 @@ class EmailTest extends CakeTestCase {
             )
         ));
 
+        $variables = array(
+            'Event' => array(
+                'name' => 'My Event',
+                'date' => 'September 28, 2011'
+            ),
+            'Moderator' => array('name' => 'Claudia Mansilla'),
+            'URL' => array(
+                'view' => Router::url('/events/view/1', true),
+                'report' => Router::url('/events/report/1', true)
+            )
+        );
+		$id = $this->Email->send('event_notification_moderator', array_merge(array(
+			'to' => 'claudia@email.com',
+			'name' => 'Claudia Mansilla'
+		), $variables));
+		$this->assertTrue(!empty($id));
+		$result = $this->Email->getSentEmail();
+		$this->assertTrue(empty($result));
+		$this->Email->sendNow($id);
+		$result = $this->Email->getSentEmail();
+
+		$this->assertTrue(!empty($result));
+		$this->assertTrue(!empty($result['text']));
+		$this->assertTrue(!empty($result['html']));
+        $this->assertEmail($result, array(
+            'subject' => 'You have been invited to My Event',
+            'text' => array(
+                'Hi Claudia Mansilla,',
+                'The event My Event was scheduled for September 28, 2011.',
+                'You can go to ' . Router::url('/events/view/1', true) . ' to see the event.',
+                'Or to report attendance, go to ' . Router::url('/events/report/1', true)
+            ),
+            'html' => array(
+                '<p>Hi Claudia Mansilla,</p>',
+                '<p>The event <a href="' . Router::url('/events/view/1', true) . '">My Event</a> was scheduled for September 28, 2011.</p>',
+                '<p><a href="' . Router::url('/events/report/1', true) . '">Click here</a> to report attendance for the event.</p>',
+            )
+        ));
+
         Configure::write('Email.templateEngine', $currentEngine);
         Configure::write('Email.templatePath', $currentTemplatePath);
     }
