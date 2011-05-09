@@ -328,6 +328,7 @@ class EmailTemplate extends EmailAppModel {
 			$controller = null;
 			$this->View = new EmailView($controller, false);
 		}
+        $this->View->viewVars = array();
         $this->View->webroot = !empty($parameters['webroot']) ? $parameters['webroot'] : '/';
 		$this->View->pageTitle = !empty($parameters['title']) ? $parameters['title'] :'';
         return $this->View;
