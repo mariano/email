@@ -20,7 +20,7 @@ CREATE TABLE `email_destinations`(
 
 CREATE TABLE `emails`(
     `id` CHAR(36) NOT NULL,
-    `template` VARCHAR(255) NOT NULL,
+    `template` VARCHAR(255) default NULL,
     `from_name` VARCHAR(255) default NULL,
     `from_email` VARCHAR(255) NOT NULL,
     `subject` VARCHAR(255) NOT NULL,
