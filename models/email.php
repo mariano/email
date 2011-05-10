@@ -62,9 +62,9 @@ class Email extends EmailAppModel {
 	 */
 	public function __construct($id = false, $table = null, $ds = null) {
 		$compress = Configure::read('Email.compress');
-		if (is_null($compress)) {
+		if (!empty($compress) && !is_array($compress)) {
 			$compress = $this->compress;
-		}
+        }
 
 		foreach($this->hasMany as $key => $binding) {
 			$this->hasMany[$key]['dependent'] = true;
