@@ -95,6 +95,7 @@ class EmailTemplate extends EmailAppModel {
      * @return array EmailTemplate
      */
     public function get($key, $variables = false) {
+        $emailTemplate = false;
         if ($this->engine === 'db') {
             $emailTemplate = $this->EmailTemplate->find('first', array(
                 'conditions' => array('EmailTemplate.key' => $key),
@@ -111,29 +112,40 @@ class EmailTemplate extends EmailAppModel {
                 'text' => null
             ));
 
-            if ($variables !== false) {
-                $basePath = Configure::read('Email.templatePath');
-                if (empty($basePath)) {
-                    $basePath = 'elements';
-                }
+            $basePath = Configure::read('Email.templatePath');
+            if (empty($basePath)) {
+                $basePath = 'elements';
+            }
+            $paths = array(
+                'html' => $this->path($key, 'html', $basePath),
+                'text' => $this->path($key, 'html', $basePath)
+            );
 
+            foreach($paths as $type => $path) {
+                if (!file_exists($path)) {
+                    unset($paths[$type]);
+                }
+            }
+
+            if (empty($paths)) {
+                return false;
+            }
+
+            if ($variables !== false) {
                 $View = $this->getView();
-                foreach(array('html', 'text') as $type) {
-                    $path = $this->path($key, $type, $basePath);
-                    if (file_exists($path)) {
-                        $emailTemplate[$this->alias][$type] = $View->element($path, !empty($variables) ? (array) $variables : array());
-                        foreach($View->viewVars as $var => $value) {
-                            if ($var === 'from') {
-                                if (preg_match('/^(.+)\s*<([^>]+)>$/', trim($value), $matches)) {
-                                    $emailTemplate['EmailTemplate']['from_name'] = $matches[1];
-                                    $emailTemplate['EmailTemplate']['from_email'] = $matches[2];
-                                } else {
-                                    $emailTemplate['EmailTemplate']['from_name'] = null;
-                                    $emailTemplate['EmailTemplate']['from_email'] = $value;
-                                }
-                            } elseif (in_array($var, array('layout', 'subject'))) {
-                                $emailTemplate['EmailTemplate'][$var] = trim($value);
+                foreach($paths as $type => $path) {
+                    $emailTemplate[$this->alias][$type] = $View->element($path, !empty($variables) ? (array) $variables : array());
+                    foreach($View->viewVars as $var => $value) {
+                        if ($var === 'from') {
+                            if (preg_match('/^(.+)\s*<([^>]+)>$/', trim($value), $matches)) {
+                                $emailTemplate['EmailTemplate']['from_name'] = $matches[1];
+                                $emailTemplate['EmailTemplate']['from_email'] = $matches[2];
+                            } else {
+                                $emailTemplate['EmailTemplate']['from_name'] = null;
+                                $emailTemplate['EmailTemplate']['from_email'] = $value;
                             }
+                        } else {
+                            $emailTemplate['EmailTemplate'][$var] = trim($value);
                         }
                     }
                 }
