@@ -68,6 +68,7 @@ class EmailTest extends CakeTestCase {
 	public function startTest($method) {
 		Configure::delete('Email');
 		Configure::write('Email.keep', true);
+        Configure::write('Email.compress', true);
 
         if (strpos($method, 'testI18n') === 0) {
             $this->_language = Configure::read('Config.language');
