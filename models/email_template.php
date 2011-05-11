@@ -118,7 +118,7 @@ class EmailTemplate extends EmailAppModel {
             }
             $paths = array(
                 'html' => $this->path($key, 'html', $basePath),
-                'text' => $this->path($key, 'html', $basePath)
+                'text' => $this->path($key, 'text', $basePath)
             );
 
             foreach($paths as $type => $path) {
