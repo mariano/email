@@ -92,9 +92,10 @@ class EmailTemplate extends EmailAppModel {
      *
      * @param string $key
      * @param mixed $variables If not false, render with variables (only when engine !== 'db')
+	 * @param boolean $escape Escape variables (only used if engine !== 'db')
      * @return array EmailTemplate
      */
-    public function get($key, $variables = false) {
+    public function get($key, $variables = false, $escape = false) {
         $emailTemplate = false;
         if ($this->engine === 'db') {
             $emailTemplate = $this->EmailTemplate->find('first', array(
@@ -134,7 +135,19 @@ class EmailTemplate extends EmailAppModel {
             if ($variables !== false) {
                 $View = $this->getView();
                 foreach($paths as $type => $path) {
-                    $emailTemplate[$this->alias][$type] = $View->element($path, !empty($variables) ? (array) $variables : array());
+                    $currentVariables = $variables;
+                    $formatVariablesKey = $type.'Variables';
+                    if (array_key_exists($formatVariablesKey, $currentVariables)) {
+                        $currentVariables = Set::merge(
+                            array_diff_key($currentVariables, array('htmlVariables'=>null, 'textVariables'=>null)),
+                            $currentVariables[$formatVariablesKey]
+                        );
+                    }
+
+                    if ((is_null($escape) && $type === 'html') || $escape) {
+                        $currentVariables = $this->escape($currentVariables);
+                    }
+                    $emailTemplate[$this->alias][$type] = $View->element($path, !empty($currentVariables) ? (array) $currentVariables : array());
                     foreach($View->viewVars as $var => $value) {
                         if ($var === 'from') {
                             if (preg_match('/^(.+)\s*<([^>]+)>$/', trim($value), $matches)) {
@@ -203,19 +216,7 @@ class EmailTemplate extends EmailAppModel {
 		}
 
 		if ($escape) {
-			foreach($variables as $variable => $value) {
-				if (!is_string($value)) {
-					continue;
-				}
-
-				$value = trim($value);
-				if ($escape && !empty($value)) {
-					$value = htmlentities($value, ENT_QUOTES, Configure::read('App.encoding'));
-					$value = str_replace("\r", "\n", str_replace("\r\n", "\n", $value));
-					$value = nl2br($value);
-				}
-				$variables[$variable] = $value;
-			}
+            $variables = $this->escape($variables);
 		}
 
 		if (preg_match_all('/\${(.+?)}/', $content, $matches, PREG_SET_ORDER)) {
@@ -344,6 +345,23 @@ class EmailTemplate extends EmailAppModel {
         $this->View->webroot = !empty($parameters['webroot']) ? $parameters['webroot'] : '/';
 		$this->View->pageTitle = !empty($parameters['title']) ? $parameters['title'] :'';
         return $this->View;
+    }
+
+    protected function escape($variables) {
+        foreach($variables as $variable => $value) {
+            if (!is_string($value)) {
+                continue;
+            }
+
+            $value = trim($value);
+            if (!empty($value)) {
+                $value = htmlentities($value, ENT_QUOTES, Configure::read('App.encoding'));
+                $value = str_replace("\r", "\n", str_replace("\r\n", "\n", $value));
+                $value = nl2br($value);
+            }
+            $variables[$variable] = $value;
+        }
+        return $variables;
     }
 }
 ?>
