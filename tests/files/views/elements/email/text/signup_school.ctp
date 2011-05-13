@@ -8,4 +8,6 @@ $this->viewVars['subject'] = sprintf(__('Welcome to %s', true), '${school}');
     $url = $this->Html->url(array('controller'=>'users', 'action'=>'login'), true);
     printf(__('Click here to login: %s', true)."\n", $url);
 ?>
-<?php echo $message; ?>
+<?php if (!empty($message)) { ?>
+    <?php echo $message; ?>
+<?php } ?>
