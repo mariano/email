@@ -489,8 +489,14 @@ class Email extends EmailAppModel {
                 if (!empty($email[$this->alias]['variables'])) {
                     $emailVariables = (array) unserialize($email[$this->alias]['variables']);
                 }
+                $emailVariables = $this->variables($email, $emailVariables);
+                $emailEscape = isset($emailVariables['escape']) ? $emailVariables['escape'] : null;
 
-                $emailTemplate = $this->EmailTemplate->get($email[$this->alias]['template'], $emailVariables);
+                $emailTemplate = $this->EmailTemplate->get(
+                    $email[$this->alias]['template'],
+                    $emailVariables,
+                    $emailEscape
+                );
             }
             if (!empty($emailTemplate)) {
                 $email = array_merge($email, $emailTemplate);

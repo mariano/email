@@ -689,6 +689,43 @@ class EmailTest extends CakeTestCase {
             )
         ));
 
+		$message = 'Personal message' . "\n" . 'with two lines';
+		$id = $this->Email->send('signup_school', array(
+			'to' => 'claudia@email.com',
+			'name' => 'Claudia Mansilla',
+			'school' => 'Cricava School',
+			'message' => $message,
+            'escape' => false,
+			'htmlVariables' => array(
+				'message' => nl2br($message)
+			)
+		));
+		$this->assertTrue(!empty($id));
+		$result = $this->Email->getSentEmail();
+		$this->assertTrue(empty($result));
+		$this->Email->sendNow($id);
+		$result = $this->Email->getSentEmail();
+		$this->assertTrue(!empty($result));
+		$this->assertTrue(!empty($result['text']));
+		$this->assertTrue(!empty($result['html']));
+        $this->assertEmail($result, array(
+            'subject' => 'Welcome to Cricava School',
+            'text' => array(
+                'Dear Claudia Mansilla,',
+                'We\'d like to welcome you to Cricava School.',
+                'Click here to login: ' . Router::url('/users/login', true),
+                'Personal message',
+                'with two lines'
+            ),
+            'html' => array(
+                '<p>Dear Claudia Mansilla,</p>',
+                '<p>We\'d like to welcome you to Cricava School.</p>',
+                '<p><a href="' . Router::url('/users/login', true) . '">Click here to login: ' . Router::url('/users/login', true).'</a></p>',
+                '<p>Personal message<br />',
+                'with two lines</p>'
+            )
+        ));
+
         $variables = array(
             'Event' => array(
                 'name' => 'My Event',
