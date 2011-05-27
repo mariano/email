@@ -290,7 +290,17 @@ class Email extends EmailAppModel {
             $this->id = $id;
             $this->save($email, true, array_keys($email[$this->alias]));
         } else if ($result) {
+            $engine = Configure::read('Email.templateEngine');
+            if ($engine !== 'db') {
+                $emailTemplateBinding = $this->belongsTo['EmailTemplate'];
+                $this->unbindModel(array('belongsTo' => array('EmailTemplate')), false);
+            }
+
             $this->delete($id);
+
+            if (!empty($emailTemplateBinding)) {
+                $this->bindModel(array('belongsTo' => array('EmailTemplate' => $emailTemplateBinding)), false);
+            }
         }
 
         if (!empty($variables['callback'])) {
