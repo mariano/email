@@ -107,10 +107,6 @@ class EmailTemplate extends EmailAppModel {
                 'key' => $key,
                 'from_name' => null,
                 'from_email' => null,
-                'layout' => null,
-                'subject' => null,
-                'html' => null,
-                'text' => null
             ));
 
             $basePath = Configure::read('Email.templatePath');
