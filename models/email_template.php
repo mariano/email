@@ -96,6 +96,11 @@ class EmailTemplate extends EmailAppModel {
      * @return array EmailTemplate
      */
     public function get($key, $variables = false, $escape = false) {
+        $oldLanguage = Configure::read('Config.language');
+        if (!empty($variables['language'])) {
+            Configure::write('Config.language', $variables['language']);
+        }
+
         $emailTemplate = false;
         if ($this->engine === 'db') {
             $emailTemplate = $this->EmailTemplate->find('first', array(
@@ -125,10 +130,12 @@ class EmailTemplate extends EmailAppModel {
             }
 
             if (empty($paths)) {
+                Configure::write('Config.language', $oldLanguage);
                 return false;
             }
 
             if ($variables !== false) {
+                
                 $View = $this->getView();
                 foreach($paths as $type => $path) {
                     $currentVariables = $variables;
@@ -160,6 +167,8 @@ class EmailTemplate extends EmailAppModel {
                 }
             }
         }
+
+        Configure::write('Config.language', $oldLanguage);
         return $emailTemplate;
     }
 
@@ -174,8 +183,13 @@ class EmailTemplate extends EmailAppModel {
 	 * @return string Content
 	 */
 	public function renderLayout($content, $layout, $type, $variables = array(), $parameters = array()) {
+        $oldLanguage = Configure::read('Config.language');
+        if (!empty($variables['language'])) {
+            Configure::write('Config.language', $variables['language']);
+        }
 		$layout = $this->path($layout, $type);
 		if (empty($layout)) {
+            Configure::write('Config.language', $oldLanguage);
 			return $content;
 		}
 
@@ -183,7 +197,9 @@ class EmailTemplate extends EmailAppModel {
 		if (!empty($variables)) {
 			$View->set($variables);
 		}
-		return $View->renderLayout($content, $layout);
+        $content = $View->renderLayout($content, $layout);
+        Configure::write('Config.language', $oldLanguage);
+		return $content;
 	}
 
 	/**
