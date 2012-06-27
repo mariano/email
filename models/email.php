@@ -445,7 +445,9 @@ class Email extends EmailAppModel {
             }
         }
 
+        $failures = null;
         if (!$this->mailer->send($mail, $failures)) {
+            CakeLog::write(LOG_ERROR, 'Plugins.Email.Email::mail() error: '.var_export($failures, true));
             return $failures;
         }
 
