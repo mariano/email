@@ -241,7 +241,7 @@ class Email extends EmailAppModel {
             throw new Exception(__('Unable to render email', true));
         }
 
-        foreach(array('from', 'replyTo') as $key) {
+        foreach(array('from', 'replyTo', 'sender') as $key) {
             if (!empty($mail[$key]) && empty($mail[$key]['name'])) {
                 $mail[$key]['name'] = $mail[$key]['email'];
             }
@@ -399,7 +399,11 @@ class Email extends EmailAppModel {
 
         $mail = Swift_Message::newInstance();
         $mail->setFrom(array($email['from']['email'] => $email['from']['name']));
-        $mail->setSender($email['from']['email']);
+        if (!empty($email['sender']['email'])) {
+          $mail->setSender($email['sender']['email']);
+        } else {
+          $mail->setSender($email['from']['email']);
+        }
         if (!empty($email['replyTo']) && !empty($email['replyTo']['email'])) {
             $mail->setReplyTo(array($email['replyTo']['email'] => $email['replyTo']['name']));
         }
@@ -567,6 +571,7 @@ class Email extends EmailAppModel {
 		$email = array(
 			'from' => array('name' => null, 'email' => null),
 			'replyTo' => null,
+			'sender' => null,
 			'subject' => null,
 			'text' => null,
 			'html' => null
@@ -599,6 +604,7 @@ class Email extends EmailAppModel {
 		$variables = array_merge(array(
 			'from' => array('name' => null, 'email' => null),
 			'replyTo' => array('name' => null, 'email' => null),
+			'sender' => array('name' => null, 'email' => null),
 			'subject' => null,
 			'layout' => null,
 			'html' => null,
@@ -638,7 +644,7 @@ class Email extends EmailAppModel {
 			);
 		}
 
-		foreach(array('from', 'replyTo') as $variable) {
+		foreach(array('from', 'replyTo', 'sender') as $variable) {
 			if (!empty($variables[$variable])) {
 				if (!is_array($variables[$variable])) {
 					$variables[$variable] = array('email' => $variables[$variable]);

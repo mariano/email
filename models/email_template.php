@@ -97,10 +97,36 @@ class EmailTemplate extends EmailAppModel {
      */
     public function get($key, $variables = false, $escape = false) {
         $oldLanguage = Configure::read('Config.language');
+        
+        $doMultiLanguage = Configure::read('Email.multi_language');
+
         if (!empty($variables['language'])) {
             Configure::write('Config.language', $variables['language']);
         }
+        $currentLanguage = Configure::read('Config.language');
+        
+        $emailTemplate = $this->_getTemplate($key, $variables, $escape);
+        if (empty($variables['language']) && $doMultiLanguage) {
+            // if Email.multi_language is enabled, append all languages enabled to one email
+            foreach ($doMultiLanguage as $language => $enabled) {
+                if (!$enabled || $language == $currentLanguage) {
+                    continue;
+                }
+                Configure::write('Config.language', $language);
+                $template = $this->_getTemplate($key, $variables, $escape);
+                if (!empty($emailTemplate['EmailTemplate']['html'])) {
+                    $emailTemplate['EmailTemplate']['html'] .= '<hr />' . $template['EmailTemplate']['html'];
+                } elseif (!empty($emailTemplate['EmailTemplate']['text'])) {
+                    $emailTemplate['EmailTemplate']['text'] .= "\n\n----------------------------------------------------\n\n" . $template['EmailTemplate']['text'];
+                }
+            }
+        }
 
+        Configure::write('Config.language', $oldLanguage);
+        return $emailTemplate;
+    }
+    
+    protected function _getTemplate($key, $variables = false, $escape = false) {
         $emailTemplate = false;
         if ($this->engine === 'db') {
             $emailTemplate = $this->EmailTemplate->find('first', array(
@@ -167,8 +193,6 @@ class EmailTemplate extends EmailAppModel {
                 }
             }
         }
-
-        Configure::write('Config.language', $oldLanguage);
         return $emailTemplate;
     }
 
